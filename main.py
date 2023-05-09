@@ -16,15 +16,24 @@ class MainApp(tk.Tk):
         self.mainMenu = MainMenu(self)
         self.mainMenu.grid(row=0, column=0)
 
+        # Current tab opened. By default is statistics tab
+        self.currentTab = Placeholder(self, bg='red')
+        self.currentTab.grid(row=0, column=1)
 
     def open_statistics_menu(self):
-        pass
+        self.currentTab.destroy()
+        self.currentTab = Placeholder(self, bg='red')
+        self.currentTab.grid(row=0, column=1)
 
     def open_video_player(self):
-        pass
+        self.currentTab.destroy()
+        self.currentTab = Placeholder(self, bg='blue')
+        self.currentTab.grid(row=0, column=1)
 
     def open_settings(self):
-        pass
+        self.currentTab.destroy()
+        self.currentTab = Placeholder(self, bg='green')
+        self.currentTab.grid(row=0, column=1)
 
 # Main menu in top left corner
 class MainMenu(tk.Frame):
@@ -55,7 +64,7 @@ class VideoPlayer(tk.Frame):
 # Basic placeholder for features that aren't implemented yet
 class Placeholder(tk.Frame):
     def __init__(self, master, *args, **kwargs):
-        super().__init__(master, *args, **kwargs)
+        super().__init__(master, height=300, width=300, *args, **kwargs)
 
 def main():
     window = MainApp()
