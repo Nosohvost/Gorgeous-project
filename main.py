@@ -1,15 +1,16 @@
 import tkinter as tk
+from tkVideoPlayer import TkinterVideo
 
 class MainApp(tk.Tk):
     def __init__(self, title='Fox spy', *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         # Minimum width & height for the window
-        self.MIN_WIDTH = 150
-        self.MIN_HEIGHT = 150
+        self.MIN_WIDTH = 450
+        self.MIN_HEIGHT = 450
         self.minsize(self.MIN_WIDTH, self.MIN_HEIGHT)
 
-        self.resizable(width=True, height=True)
+        self.resizable(width=False, height=False)
         self.title(title)
 
         # Create main menu
@@ -27,7 +28,7 @@ class MainApp(tk.Tk):
 
     def open_video_player(self):
         self.currentTab.destroy()
-        self.currentTab = Placeholder(self, bg='blue')
+        self.currentTab = VideoPlayer(self)
         self.currentTab.grid(row=0, column=1)
 
     def open_settings(self):
@@ -59,7 +60,14 @@ class SettingsMenu(tk.Frame):
     pass
 
 class VideoPlayer(tk.Frame):
-    pass
+    def __init__(self, master, *args, **kwargs):
+        super().__init__(master, *args, **kwargs)
+        video = TkinterVideo(self, height=1, width=1, scaled=True)
+        video.load(r"videos\cool_cat.mp4")
+        video.grid(row=0, column=0)
+        video.play()
+
+        
         
 # Basic placeholder for features that aren't implemented yet
 class Placeholder(tk.Frame):
