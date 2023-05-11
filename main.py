@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkVideoPlayer import TkinterVideo
+import os
 
 class MainApp(tk.Tk):
     def __init__(self, title='Fox spy', *args, **kwargs):
@@ -59,20 +60,74 @@ class PlotCreator(tk.Frame):
 class SettingsMenu(tk.Frame):
     pass
 
+# Toolbar and video itself
 class VideoPlayer(tk.Frame):
     def __init__(self, master, *args, **kwargs):
         super().__init__(master, *args, **kwargs)
-        video = TkinterVideo(self, height=1, width=1, scaled=True)
-        video.load(r"videos\cool_cat.mp4")
-        video.grid(row=0, column=0)
-        video.play()
+        self.video_index = 0
+        self.videos_list = ["videos\\" + file for file in os.listdir(r'.\videos')]
 
+        # Video
+        self.video = TkinterVideo(self, height=1, width=1, scaled=True)
+        self.video.load(self.videos_list[0])
+        self.video.grid(row=0, column=0)
+
+        # Toolbar
+        self.progressBar = Placeholder(self, height=25, width=640, bg='red')
+        self.toolBar = tk.Frame(self)
+        self.pauseButton = tk.Button(self.toolBar, text='Pause', 
+                                     command=self.pause_button_click)
+        self.nextVideoButton = tk.Button(self.toolBar, text='Next video', 
+                                         command=self.next_video)
+        self.previousVideoButton = tk.Button(self.toolBar, text='Previous video', 
+                                             command=self.previous_video)
+
+        # Progress bar & buttons' frame
+        self.progressBar.grid(row=1, column=0)
+        self.toolBar.grid(row=2, column=0)
+
+        # Buttons
+        padx = 5
+        self.previousVideoButton.grid(row=0, column=0, padx=padx)
+        self.pauseButton.grid(row=0, column=1, padx=padx)
+        self.nextVideoButton.grid(row=0, column=2, padx=padx)
         
         
+        # Fix for a bug in the tkVideoPlayer library
+        self.video.bind("<<Loaded>>", lambda e: e.widget.config(width=640, height=480))
+
+        self.video.play()
+
+    # Called when (un)pause button is clicked
+    def pause_button_click(self):
+        if (not self.video.is_paused()):
+            self.video.pause()
+            self.pauseButton.config(text='Unpause')
+            
+        else:
+            self.video.play()
+            self.pauseButton.config(text='Pause')
+
+    
+    # Load next video
+    def next_video(self):
+        self.video_index = min(self.video_index + 1, len(self.videos_list) - 1)
+        self.video.load(self.videos_list[self.video_index])
+        self.video.play()
+        
+
+
+    # Load previous video
+    def previous_video(self):
+        self.video_index = max(self.video_index - 1, 0)
+        self.video.load(self.videos_list[self.video_index])
+        self.video.play()
+    
+
 # Basic placeholder for features that aren't implemented yet
 class Placeholder(tk.Frame):
-    def __init__(self, master, *args, **kwargs):
-        super().__init__(master, height=300, width=300, *args, **kwargs)
+    def __init__(self, master, height=300, width=300, *args, **kwargs):
+        super().__init__(master, height=height, width=width, *args, **kwargs)
 
 def main():
     window = MainApp()
