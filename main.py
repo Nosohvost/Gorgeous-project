@@ -67,11 +67,6 @@ class VideoPlayer(tk.Frame):
         self.video_index = 0
         self.videos_list = ["videos\\" + file for file in os.listdir(r'.\videos')]
 
-        # Video
-        self.video = TkinterVideo(self, height=1, width=1, scaled=True)
-        self.video.load(self.videos_list[0])
-        self.video.grid(row=0, column=0)
-
         # Toolbar
         self.progressBar = Placeholder(self, height=25, width=640, bg='red')
         self.toolBar = tk.Frame(self)
@@ -91,12 +86,8 @@ class VideoPlayer(tk.Frame):
         self.previousVideoButton.grid(row=0, column=0, padx=padx)
         self.pauseButton.grid(row=0, column=1, padx=padx)
         self.nextVideoButton.grid(row=0, column=2, padx=padx)
-        
-        
-        # Fix for a bug in the tkVideoPlayer library
-        self.video.bind("<<Loaded>>", lambda e: e.widget.config(width=640, height=480))
 
-        self.video.play()
+        self.load_video()
 
     # Called when (un)pause button is clicked
     def pause_button_click(self):
@@ -108,20 +99,38 @@ class VideoPlayer(tk.Frame):
             self.video.play()
             self.pauseButton.config(text='Pause')
 
-    
+    # Creates a new instance of TkinterVideo and deletes the previous one
+    def load_video(self):
+        path = self.videos_list[self.video_index]
+        
+        try:
+            self.video.destroy()
+        except:
+            # Video is already closed
+            pass
+
+        self.video = TkinterVideo(self, height=1, width=1, scaled=True)
+
+        # Fix for a bug in the tkVideoPlayer library
+        self.video.bind("<<Loaded>>", lambda e: e.widget.config(width=640, height=480))
+
+        self.video.load(path)
+        self.video.grid(row=0, column=0)
+        self.video.play()
+        
+        self.pauseButton.config(text='Pause')
+
     # Load next video
     def next_video(self):
         self.video_index = min(self.video_index + 1, len(self.videos_list) - 1)
-        self.video.load(self.videos_list[self.video_index])
-        self.video.play()
+        self.load_video()
         
 
 
     # Load previous video
     def previous_video(self):
         self.video_index = max(self.video_index - 1, 0)
-        self.video.load(self.videos_list[self.video_index])
-        self.video.play()
+        self.load_video()
     
 
 # Basic placeholder for features that aren't implemented yet
