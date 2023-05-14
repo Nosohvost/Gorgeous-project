@@ -128,6 +128,7 @@ class VideoPlayer(tk.Frame):
 class ProgressBar(tk.Frame):
     def __init__(self, master, height, width, video: TkinterVideo, *args, **kwargs):
         super().__init__(master, height=height, width=width, *args, **kwargs)
+        self.mouse_clicked = False
 
         self.height = height
         self.width = width
@@ -138,6 +139,10 @@ class ProgressBar(tk.Frame):
         self.video.bind('<<Duration>>', self.set_duration)
         self.video.bind('<<SecondChanged>>', self.update)
         self.video.bind('<<Ended>>', self.video_ended)
+
+        # For when progress bar is clicked
+        self.redLine.bind('<B1-Motion>', self.bar_clicked)
+        self.redLine.bind('<ButtonRelease-1>', self.mouse_released)
 
         self.pack_propagate(False) # Prevent shrinking the progress bar to fit the redLine
         self.redLine.pack(side='left')
@@ -153,6 +158,8 @@ class ProgressBar(tk.Frame):
         
     # Update the red line to match the current progress
     def update(self, event):
+        if (self.mouse_clicked):
+            return
         if (self.duration != 0):
             progress = self.video.current_duration() / self.duration # Between 0 and 1
             #print(self.video.current_duration(), self.duration)
@@ -160,6 +167,19 @@ class ProgressBar(tk.Frame):
             progress = 0
         new_width = int(self.width * progress)
         self.redLine.config(width=new_width)
+
+    def bar_clicked(self, event):
+        self.mouse_clicked = True
+        progress = event.x / self.width
+        progress = max(0, progress)
+        progress = min(self.width, progress)
+
+        self.video.seek(int(self.duration * progress))
+        new_width = int(self.width * progress)
+        self.redLine.config(width=new_width)
+        
+    def mouse_released(self, event):
+        self.mouse_clicked = False
 
 
 
