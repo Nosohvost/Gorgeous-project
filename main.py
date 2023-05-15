@@ -2,6 +2,10 @@ import tkinter as tk
 from tkVideoPlayer import TkinterVideo
 import os
 import threading
+import tkinter.filedialog
+import tkinter.messagebox
+import pathlib
+import math
 
 class MainApp(tk.Tk):
     def __init__(self, title='Fox spy', *args, **kwargs):
@@ -66,22 +70,27 @@ class SettingsMenu(tk.Frame):
 class VideoPlayer(tk.Frame):
     def __init__(self, master, *args, **kwargs):
         super().__init__(master, *args, **kwargs)
+        self.VIDEO_HEIGHT = 432
+        self.VIDEO_WIDTH = 768
+
         self.video_index = 0
         self.videos_list = ["videos\\" + file for file in os.listdir(r'.\videos')]
 
         self.video = TkinterVideo(self, height=1, width=1, scaled=True)
         # Fix for a bug in the tkVideoPlayer library
-        self.video.bind("<<Loaded>>", lambda e: e.widget.config(width=640, height=480))
+        self.video.bind("<<Loaded>>", lambda e: e.widget.config(width=self.VIDEO_WIDTH, height=self.VIDEO_HEIGHT))
         
-        # Toolbar
-        self.progressBar = ProgressBar(self, height=20, width=640, video=self.video, bg='black')
+        # Toolbar and progress bar
+        self.progressBar = ProgressBar(self, height=20, width=self.VIDEO_WIDTH, video=self.video, bg='black')
         self.toolBar = tk.Frame(self)
         self.pauseButton = tk.Button(self.toolBar, text='Pause', 
-                                     command=self.pause_button_click)
+                                     command=self.pause_button_click, width=8)
         self.nextVideoButton = tk.Button(self.toolBar, text='Next video', 
                                          command=self.next_video)
         self.previousVideoButton = tk.Button(self.toolBar, text='Previous video', 
                                              command=self.previous_video)
+        self.loadButton = tk.Button(self, text='Load video',
+                                    command=self.choose_video)
 
         # Progress bar & buttons' frame
         self.progressBar.grid(row=1, column=0)
@@ -89,23 +98,51 @@ class VideoPlayer(tk.Frame):
 
         # Buttons
         padx = 5
-        self.previousVideoButton.grid(row=0, column=0, padx=padx)
-        self.pauseButton.grid(row=0, column=1, padx=padx)
-        self.nextVideoButton.grid(row=0, column=2, padx=padx)
+        self.loadButton.grid(row=2, column=0, padx=padx, sticky='W')
+        self.previousVideoButton.grid(row=0, column=1, padx=padx)
+        self.pauseButton.grid(row=0, column=2, padx=padx)
+        self.nextVideoButton.grid(row=0, column=3, padx=padx)
 
         self.video.grid(row=0, column=0)
         self.video.load(self.videos_list[0])
         self.video.play()
 
-    # Called when (un)pause button is clicked
+    # Pause the video
+    def pause(self):
+        self.video.pause()
+        self.pauseButton.config(text='Unpause')
+
+    # Unpause the video
+    def unpause(self):
+        self.video.play()
+        self.pauseButton.config(text='Pause')
+
+    # (Un)pause button is clicked
     def pause_button_click(self):
         if (not self.video.is_paused()):
-            self.video.pause()
-            self.pauseButton.config(text='Unpause')
-            
+            self.pause()
         else:
-            self.video.play()
-            self.pauseButton.config(text='Pause')
+            self.unpause()
+
+    # Opens pop-up window for user to choose the video
+    def choose_video(self):
+        path = tkinter.filedialog.askopenfilename(
+            title="Load video",
+            initialdir=str(pathlib.Path(__file__).parent.resolve()) + '/videos',
+            filetypes=[('mp4', '*.mp4')])
+        
+        if (not path): # User closed the window
+            return
+        
+        path = path.split('/')
+        if (path[-2] != 'videos'):
+            tkinter.messagebox.showerror(title="Error", 
+                                          message="Select file in the 'videos' folder")
+            return
+
+        path = path[-2] + '\\' + path[-1]
+        self.video_index = self.videos_list.index(path)
+        self.load_video()
 
     # Loads video using self.video_index
     def load_video(self):
@@ -119,7 +156,6 @@ class VideoPlayer(tk.Frame):
         self.video_index = min(self.video_index + 1, len(self.videos_list) - 1)
         self.load_video()
         
-        
     # Load previous video
     def previous_video(self):
         self.video_index = max(self.video_index - 1, 0)
@@ -128,7 +164,8 @@ class VideoPlayer(tk.Frame):
 class ProgressBar(tk.Frame):
     def __init__(self, master, height, width, video: TkinterVideo, *args, **kwargs):
         super().__init__(master, height=height, width=width, *args, **kwargs)
-        self.mouse_clicked = False
+        self.user_paused = False
+        self.click_in_progress = False
 
         self.height = height
         self.width = width
@@ -141,10 +178,12 @@ class ProgressBar(tk.Frame):
         self.video.bind('<<Ended>>', self.video_ended)
 
         # For when progress bar is clicked
+        self.bind('<B1-Motion>', self.bar_clicked)
+        self.bind('<ButtonRelease-1>', self.mouse_released)
         self.redLine.bind('<B1-Motion>', self.bar_clicked)
         self.redLine.bind('<ButtonRelease-1>', self.mouse_released)
 
-        self.pack_propagate(False) # Prevent shrinking the progress bar to fit the redLine
+        self.pack_propagate(False) # Prevent the progress bar shrinking to fit the redLine
         self.redLine.pack(side='left')
 
     # Fix for a bug in TkinterVideo libary
@@ -158,32 +197,36 @@ class ProgressBar(tk.Frame):
         
     # Update the red line to match the current progress
     def update(self, event):
-        if (self.mouse_clicked):
-            return
         if (self.duration != 0):
             progress = self.video.current_duration() / self.duration # Between 0 and 1
-            #print(self.video.current_duration(), self.duration)
         else:
             progress = 0
         new_width = int(self.width * progress)
         self.redLine.config(width=new_width)
 
+    # Clicked on a progress bar
     def bar_clicked(self, event):
-        self.mouse_clicked = True
+        if (not self.click_in_progress):
+            self.click_in_progress = True
+            self.user_paused = self.video.is_paused()
+
         progress = event.x / self.width
         progress = max(0, progress)
         progress = min(self.width, progress)
 
-        self.video.seek(int(self.duration * progress))
-        new_width = int(self.width * progress)
-        self.redLine.config(width=new_width)
+        self.video.seek(math.ceil(self.duration * progress))
+        self.video.play()
+
+        timer = threading.Timer(0.05, lambda: self.video.pause()) # Time to update the frame
+        timer.start()
+        self.update(None)
         
+    # Only when it was clicked on a progress bar
     def mouse_released(self, event):
-        self.mouse_clicked = False
-
-
-
-
+        if (not self.user_paused):
+            timer = threading.Timer(0.1, lambda: self.master.unpause())
+            timer.start()
+        self.click_in_progress = False
 
 # Basic placeholder for features that aren't implemented yet
 class Placeholder(tk.Frame):
