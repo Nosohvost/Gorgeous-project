@@ -40,10 +40,16 @@ class Classifier():
 
 class Camera():
     def __init__(self, rtsp_url, database, log=False):
-        self.RTSP_URL = rtsp_url
+        self.rtsp_url = rtsp_url
         self.classifier = Classifier()
         self.database = database
         self.log = log
+
+        # Number of pixels to crop each side
+        self.top_crop = 100
+        self.bottom_crop = 10
+        self.left_crop = 0
+        self.right_crop = 50
 
     # Prints message only of logging is turned on
     def print_log(self, message):
@@ -62,6 +68,18 @@ class Camera():
         mse = np.mean((frame1 - frame2) ** 2)
         return mse
     
+    # Crops frame by n pixels in each direction
+    def crop_frame(self, frame, top_crop, bottom_crop, left_crop, right_crop):
+        return frame[top_crop : frame.shape[0] - bottom_crop, 
+                     left_crop : frame.shape[1] - right_crop]
+    
+    # Read 1 frame from a camera
+    def read_frame(self):
+        success, frame = self.cam.read()
+        frame = cv.cvtColor(frame, cv.COLOR_BGR2RGB) # Convert from BGR to RGB
+        frame = self.crop_frame(frame, self.top_crop, self.bottom_crop, self.left_crop, self.right_crop) # Crop the frame
+        return success, frame
+    
     # Start looking for movement on the camera
     def start(self, end: threading.Event, mse_threshold, consequent_frames_threshold):
         ''' Starts looking for movement on a camera until stopped by main program
@@ -69,21 +87,20 @@ class Camera():
             the next 70 frames (~5 seconds) are recorded. When frames are finished recording,
             they are passed to Classifier which assigns a label. If the label is not empty, 
             mp4 file is created and saved, and the database is updated'''
+        
         # Connect to the camera
-        self.cam = cv.VideoCapture(self.RTSP_URL)
-        self.print_log(f"Connected to camera at {self.RTSP_URL}")
+        self.cam = cv.VideoCapture(self.rtsp_url)
+        self.print_log(f"Connected to camera at {self.rtsp_url}")
 
         frames = []
-        success, prev_frame = self.cam.read()
-        prev_frame = cv.cvtColor(prev_frame, cv.COLOR_RGB2BGR) # Convert from BGR to RGB
+        success, prev_frame = self.read_frame()
         consequent_frames = 0
         to_be_saved = 0
 
         # Keep reading new frames until either stopped by main program or error occurs
         while self.cam.isOpened() and not end.is_set() and success:
             # Read new frame
-            success, new_frame = self.cam.read()
-            new_frame = cv.cvtColor(prev_frame, cv.COLOR_RGB2BGR) # Convert from BGR to RGB
+            success, new_frame = self.read_frame()
 
             # Update number of consequent frames which exceeded MSE threshold (or reset to 0)
             if self.mse(prev_frame, new_frame) > mse_threshold:
@@ -105,6 +122,9 @@ class Camera():
             elif len(frames) != 0:
                 self.print_log("Finished recording frames, starting processing")
                 self.process_frames(frames)
+                frames = []
+
+            prev_frame = new_frame
 
         self.cam.release()
         cv.destroyAllWindows()
@@ -131,6 +151,6 @@ if __name__ == "__main__":
     db = dbutils.Database()
     cam = Camera(RTSP_URL, db, log=True)
     event = threading.Event()
-    print('Starting recording')
+    print('Starting the camera')
     cam.start(event, 30, 4)
-    print('Ending recording')
+    print('Program ended')
