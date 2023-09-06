@@ -74,7 +74,7 @@ class VideoPlayer(tk.Frame):
         self.VIDEO_WIDTH = 768
 
         self.video_index = 0
-        self.videos_list = ["videos\\" + file for file in os.listdir(r'.\videos')]
+        self.videos_list = ["videos/" + file for file in os.listdir('./videos')]
 
         self.video = TkinterVideo(self, height=1, width=1, scaled=True)
         # Fix for a bug in the tkVideoPlayer library
@@ -140,7 +140,7 @@ class VideoPlayer(tk.Frame):
                                           message="Select file in the 'videos' folder")
             return
 
-        path = path[-2] + '\\' + path[-1]
+        path = path[-2] + '/' + path[-1]
         self.video_index = self.videos_list.index(path)
         self.load_video()
 
@@ -186,7 +186,7 @@ class ProgressBar(tk.Frame):
         self.pack_propagate(False) # Prevent the progress bar shrinking to fit the redLine
         self.redLine.pack(side='left')
 
-    # Fix for a bug in TkinterVideo libary
+    # Fix for a bug in TkinterVideo library
     def video_ended(self, event):
         self.redLine.config(width=self.width)
 
