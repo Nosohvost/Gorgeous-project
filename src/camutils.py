@@ -39,10 +39,16 @@ class Classifier():
 
 
 class Camera():
-    def __init__(self, rtsp_url, database):
+    def __init__(self, rtsp_url, database, log=False):
         self.RTSP_URL = rtsp_url
         self.classifier = Classifier()
         self.database = database
+        self.log = log
+
+    # Prints message only of logging is turned on
+    def print_log(self, message):
+        if self.log:
+            print(message)
 
     # Calculates MSE between two frames
     def mse(self, frame1, frame2):
@@ -57,26 +63,37 @@ class Camera():
         return mse
     
     # Start looking for movement on the camera
-    def start(self, end: threading.Event, mse_threshold):
+    def start(self, end: threading.Event, mse_threshold, consequent_frames_threshold):
         ''' Starts looking for movement on a camera until stopped by main program
-            or an error occurs. When MSE between two consequent frames exceeds threshold,
+            or an error occurs. When MSE between <n> consequent frames exceeds threshold,
             the next 70 frames (~5 seconds) are recorded. When frames are finished recording,
             they are passed to Classifier which assigns a label. If the label is not empty, 
             mp4 file is created and saved, and the database is updated'''
         # Connect to the camera
         self.cam = cv.VideoCapture(self.RTSP_URL)
-        
+        self.print_log(f"Connected to camera at {self.RTSP_URL}")
+
         frames = []
         success, prev_frame = self.cam.read()
+        prev_frame = cv.cvtColor(prev_frame, cv.COLOR_RGB2BGR) # Convert from BGR to RGB
+        consequent_frames = 0
         to_be_saved = 0
 
         # Keep reading new frames until either stopped by main program or error occurs
         while self.cam.isOpened() and not end.is_set() and success:
             # Read new frame
             success, new_frame = self.cam.read()
+            new_frame = cv.cvtColor(prev_frame, cv.COLOR_RGB2BGR) # Convert from BGR to RGB
 
-            # Queue 70 frames to be saved if there's movement
-            if mse(prev_frame, new_frame) > mse_threshold:
+            # Update number of consequent frames which exceeded MSE threshold (or reset to 0)
+            if self.mse(prev_frame, new_frame) > mse_threshold:
+                consequent_frames += 1
+            else:
+                consequent_frames = 0
+
+            # Queue 70 frames to be saved if enough consequent frames show movement
+            if (consequent_frames > consequent_frames_threshold):
+                self.print_log("Queueing 70 frames to be saved")
                 to_be_saved = 70
 
             # Save the current frame if queued
@@ -86,22 +103,25 @@ class Camera():
 
             # Process frames when they are finished recording
             elif len(frames) != 0:
+                self.print_log("Finished recording frames, starting processing")
                 self.process_frames(frames)
 
         self.cam.release()
+        cv.destroyAllWindows()
 
     # Classifies a video with neural net 
     def process_frames(self, frames):
         # Get a prediction
         pred = self.classifier.classify_video(frames)
+        self.print_log(f'Object labeled as {pred}')
         
         if pred == 'Empty':
             return
         
-        print(f'Movement detected, labeled as {pred}')
         # TODO save videos to database
 
 
+# Testing
 if __name__ == "__main__":
     USERNAME = 'username'
     PASSWORD = 'spying_on_foxes'
@@ -109,8 +129,8 @@ if __name__ == "__main__":
     PORT = '554'
     RTSP_URL = f"rtsp://{USERNAME}:{PASSWORD}@{IP_ADDRESS}:{PORT}/stream1"
     db = dbutils.Database()
-    cam = Camera(RTSP_URL, db)
+    cam = Camera(RTSP_URL, db, log=True)
     event = threading.Event()
     print('Starting recording')
-    cam.start(event, db)
+    cam.start(event, 30, 4)
     print('Ending recording')
