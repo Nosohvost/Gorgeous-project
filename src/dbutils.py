@@ -24,6 +24,11 @@ class Database():
             for row in reader:
                 records.append(row)
         return records
+    
+    # Delete the database
+    def delete_database(self):
+        with self.lock, open(DATABASE_PATH, 'w'):
+            print('Database deleted')
 
 if __name__ == "__main__":
     DATABASE_PATH = '../database.csv'
@@ -32,4 +37,6 @@ if __name__ == "__main__":
     db.write_record([''])
     db.write_record(['''this is a loooooooooooong sentence!'''])
 
+    print(db.read_records())
+    db.delete_database()
     print(db.read_records())
