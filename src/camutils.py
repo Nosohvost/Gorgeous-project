@@ -3,12 +3,16 @@ import cv2 as cv
 import threading
 import numpy as np
 import dbutils
+from datetime import datetime
+import time
+
+LEARNER_PATH = './NN.pkl'
 
 # A classifier based on CNN that identifies object on a video/image
 # Possible options: Empty; Human; Cat; Dog; Fox
 class Classifier():
     def __init__(self):
-        self.LEARNER_PATH = '../NN.pkl'
+        self.LEARNER_PATH = LEARNER_PATH
         self.learner = load_learner(self.LEARNER_PATH)
     
     # Classifies a video. Video must be a list of frames
@@ -50,6 +54,9 @@ class Camera():
         self.bottom_crop = 10
         self.left_crop = 0
         self.right_crop = 50
+
+        # Fps in saved videos
+        self.fps = 14
 
     # Prints message only of logging is turned on
     def print_log(self, message):
@@ -138,7 +145,11 @@ class Camera():
         if pred == 'Empty':
             return
         
-        # TODO save videos to database
+        absolute_time = int(time.time()) # Time in seconds since 1 January 1970
+        formatted_time = time.strftime("%d/%m/%y %H:%M:%S") # Date in human-readable format
+        video_name = pred + " " + formatted_time
+        db.write_record([absolute_time, formatted_time, pred])
+        db.save_video(frames, video_name, self.fps)
 
 
 # Testing
@@ -148,7 +159,12 @@ if __name__ == "__main__":
     IP_ADDRESS = "192.168.0.211"
     PORT = '554'
     RTSP_URL = f"rtsp://{USERNAME}:{PASSWORD}@{IP_ADDRESS}:{PORT}/stream1"
-    db = dbutils.Database()
+    LEARNER_PATH = '../NN.pkl' # Adjust learner path
+
+    dbutils.DATABASE_PATH = '../database.csv'
+    dbutils.VIDEOS_PATH = '../videos/'
+
+    db = dbutils.Database(log=True)
     cam = Camera(RTSP_URL, db, log=True)
     event = threading.Event()
     print('Starting the camera')
