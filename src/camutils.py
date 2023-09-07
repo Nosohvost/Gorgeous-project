@@ -146,8 +146,9 @@ class Camera():
             return
         
         absolute_time = int(time.time()) # Time in seconds since 1 January 1970
-        formatted_time = time.strftime("%d/%m/%y %H:%M:%S") # Date in human-readable format
-        video_name = pred + " " + formatted_time
+        formatted_time = time.strftime("%d/%m/%y %Hh:%Mm:%Ss") # Date in human-readable format
+        file_name_time = time.strftime("%d-%m-%y %Hh %Mm %Ss") # Time for file name
+        video_name = pred + " " + file_name_time
         db.write_record([absolute_time, formatted_time, pred])
         db.save_video(frames, video_name, self.fps)
 

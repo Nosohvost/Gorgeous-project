@@ -76,7 +76,6 @@ if __name__ == "__main__":
     for i in range(0, 30):
         frames.append(frame)
         success, frame = cam.read()
-    
     print('Saving video')
-    db.save_video(frames, 'cool_cat_copy', 14)
+    db.save_video(frames, 'test_video', 14)
     print('Video saved')
