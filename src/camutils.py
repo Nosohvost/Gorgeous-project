@@ -48,7 +48,7 @@ class Classifier():
         
         # Else return most popular prediction
         else:
-            return max(predictions)
+            return max(predictions, key=predictions.get) # Get the key with maximum value
 
     # Classifies a single image
     def classify_img(self, img):
