@@ -1,8 +1,13 @@
+import os
+if os.name == 'nt': # Fix for windows and fastai library
+    import pathlib
+    pathlib.PosixPath = pathlib.WindowsPath
+
 from fastai.vision.all import *
 import cv2 as cv
 import threading
 import numpy as np
-import dbutils
+from src import dbutils
 from datetime import datetime
 import time
 
@@ -92,7 +97,7 @@ class Camera():
             return False, None
     
     # Start looking for movement on the camera
-    def start(self, end: threading.Event, mse_threshold, consequent_frames_threshold):
+    def start(self, end: threading.Event, mse_threshold=30, consequent_frames_threshold=4):
         ''' Starts looking for movement on a camera until stopped by main program
             or an error occurs. When MSE between <n> consequent frames exceeds threshold,
             the next 70 frames (~5 seconds) and 30 previous are recorded. When frames are finished recording,
@@ -100,8 +105,9 @@ class Camera():
             mp4 file is created and saved, and the database is updated'''
 
         # Connect to the camera
+        self.print_log(f"Connecting to camera at {self.rtsp_url}")
         self.cam = cv.VideoCapture(self.rtsp_url)
-        self.print_log(f"Connected to camera at {self.rtsp_url}")
+        self.print_log(f"Finished connecting")
 
         frames_to_save = []
         success, new_frame = self.read_frame()
@@ -138,6 +144,7 @@ class Camera():
             frames_queue.append(new_frame)
             frames_queue.pop(0)
                 
+        self.print_log('Exiting camera')
         self.cam.release()
         cv.destroyAllWindows()
 

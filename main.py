@@ -6,10 +6,17 @@ import tkinter.filedialog
 import tkinter.messagebox
 import pathlib
 import math
+from src import dbutils, camutils
 
 class MainApp(tk.Tk):
     def __init__(self, title='Fox spy', *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        rtsp_url = "rtsp://username:spying_on_foxes@192.168.0.211:554/stream1"
+        self.cam_end = threading.Event()
+        self.db = dbutils.Database()
+        self.cam = camutils.Camera(rtsp_url, self.db, log=True)
+        self.cam_thread = threading.Thread(target=self.cam.start, args=(self.cam_end,))
 
         # Minimum width & height for the window
         self.MIN_WIDTH = 450
@@ -27,6 +34,24 @@ class MainApp(tk.Tk):
         self.currentTab = Placeholder(self, bg='red')
         self.currentTab.grid(row=0, column=1)
 
+    # Starts the camera if it's not working
+    def start_camera(self, restart=False):
+        if not self.cam_thread.is_alive():
+            self.cam_thread = threading.Thread(target=self.cam.start, args=(self.cam_end,))
+            self.cam_end.clear()
+            self.cam_thread.start()
+
+    # Stops the camera if it's working
+    def stop_camera(self):
+        self.cam_end.set()
+        if self.cam_thread.is_alive():
+            self.cam_thread.join()
+
+    # Restarts the camera
+    def restart_camera(self):
+        self.stop_camera()
+        self.start_camera()
+
     def open_statistics_menu(self):
         self.currentTab.destroy()
         self.currentTab = Placeholder(self, bg='red')
@@ -39,7 +64,7 @@ class MainApp(tk.Tk):
 
     def open_settings(self):
         self.currentTab.destroy()
-        self.currentTab = Placeholder(self, bg='green')
+        self.currentTab = SettingsMenu(self)
         self.currentTab.grid(row=0, column=1)
 
 
@@ -64,7 +89,12 @@ class PlotCreator(tk.Frame):
     pass
 
 class SettingsMenu(tk.Frame):
-    pass
+    def __init__(self, master, *args, **kwargs):
+        super().__init__(master, *args, **kwargs)
+        self.master = master
+
+        self.resetCamButton = tk.Button(self, text="restart the cam", command=self.master.restart_camera)
+        self.resetCamButton.grid(column=0, row=0)
 
 # Toolbar and video itself
 class VideoPlayer(tk.Frame):
