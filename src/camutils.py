@@ -14,6 +14,17 @@ class Classifier():
     def __init__(self):
         self.LEARNER_PATH = LEARNER_PATH
         self.learner = load_learner(self.LEARNER_PATH)
+
+        # Number of pixels to crop each side
+        self.top_crop = 100
+        self.bottom_crop = 10
+        self.left_crop = 0
+        self.right_crop = 50
+
+    # Crops frame by n pixels in each direction
+    def crop_frame(self, frame, top_crop, bottom_crop, left_crop, right_crop):
+        return frame[top_crop : frame.shape[0] - bottom_crop, 
+                     left_crop : frame.shape[1] - right_crop]
     
     # Classifies a video. Video must be a list of frames
     def classify_video(self, video):
@@ -22,9 +33,12 @@ class Classifier():
                        'Cat'  : 0,
                        'Dog'  : 0,
                        'Fox'  : 0}
+
         # Get predictions for each frame
         for frame in video:
-            predictions[self.classify_img(frame)] += 1
+            transformed_frame = cv.cvtColor(frame, cv.COLOR_BGR2RGB) # Convert from BGR to RGB
+            transformed_frame = self.crop_frame(transformed_frame, self.top_crop, self.bottom_crop, self.left_crop, self.right_crop) # Crop the frame
+            predictions[self.classify_img(transformed_frame)] += 1
 
         # Return 'Empty' if >90% of frames are classified as empty
         empty_count = predictions['Empty']
@@ -49,12 +63,6 @@ class Camera():
         self.database = database
         self.log = log
 
-        # Number of pixels to crop each side
-        self.top_crop = 100
-        self.bottom_crop = 10
-        self.left_crop = 0
-        self.right_crop = 50
-
         # Fps in saved videos
         self.fps = 14
 
@@ -75,64 +83,61 @@ class Camera():
         mse = np.mean((frame1 - frame2) ** 2)
         return mse
     
-    # Crops frame by n pixels in each direction
-    def crop_frame(self, frame, top_crop, bottom_crop, left_crop, right_crop):
-        return frame[top_crop : frame.shape[0] - bottom_crop, 
-                     left_crop : frame.shape[1] - right_crop]
-    
     # Read 1 frame from a camera
     def read_frame(self):
-        success, frame = self.cam.read()
-        frame = cv.cvtColor(frame, cv.COLOR_BGR2RGB) # Convert from BGR to RGB
-        frame = self.crop_frame(frame, self.top_crop, self.bottom_crop, self.left_crop, self.right_crop) # Crop the frame
-        return success, frame
+        try:
+            success, frame = self.cam.read()
+            return success, frame
+        except:
+            return False, None
     
     # Start looking for movement on the camera
     def start(self, end: threading.Event, mse_threshold, consequent_frames_threshold):
         ''' Starts looking for movement on a camera until stopped by main program
             or an error occurs. When MSE between <n> consequent frames exceeds threshold,
-            the next 70 frames (~5 seconds) are recorded. When frames are finished recording,
+            the next 70 frames (~5 seconds) and 30 previous are recorded. When frames are finished recording,
             they are passed to Classifier which assigns a label. If the label is not empty, 
             mp4 file is created and saved, and the database is updated'''
-        
+
         # Connect to the camera
         self.cam = cv.VideoCapture(self.rtsp_url)
         self.print_log(f"Connected to camera at {self.rtsp_url}")
 
-        frames = []
-        success, prev_frame = self.read_frame()
+        frames_to_save = []
+        success, new_frame = self.read_frame()
         consequent_frames = 0
         to_be_saved = 0
+        frames_queue = [new_frame] * 30 # Fill the queue with the first frame
 
         # Keep reading new frames until either stopped by main program or error occurs
         while self.cam.isOpened() and not end.is_set() and success:
-            # Read new frame
-            success, new_frame = self.read_frame()
-
-            # Update number of consequent frames which exceeded MSE threshold (or reset to 0)
-            if self.mse(prev_frame, new_frame) > mse_threshold:
+            # Update the number of consequent frames which exceeded MSE threshold (or reset to 0)
+            if self.mse(frames_queue[-1], frames_queue[-2]) > mse_threshold:
                 consequent_frames += 1
             else:
                 consequent_frames = 0
 
-            # Queue 70 frames to be saved if enough consequent frames show movement
+            # Queue 100 (30 previous + 70 next) frames to be saved if enough consequent frames show movement
             if (consequent_frames > consequent_frames_threshold):
-                self.print_log("Queueing 70 frames to be saved")
-                to_be_saved = 70
+                self.print_log("Queueing 100 frames to be saved")
+                to_be_saved = 100
 
             # Save the current frame if queued
             if to_be_saved > 0:
                 to_be_saved -= 1
-                frames.append(new_frame)
+                frames_to_save.append(frames_queue[0])
 
-            # Process frames when they are finished recording
-            elif len(frames) != 0:
+            # Process the frames when they are finished recording
+            elif len(frames_to_save) != 0:
                 self.print_log("Finished recording frames, starting processing")
-                self.process_frames(frames)
-                frames = []
+                self.process_frames(frames_to_save)
+                frames_to_save = []
 
-            prev_frame = new_frame
-
+            # Read a new frame and update the queue
+            success, new_frame = self.read_frame()
+            frames_queue.append(new_frame)
+            frames_queue.pop(0)
+                
         self.cam.release()
         cv.destroyAllWindows()
 
