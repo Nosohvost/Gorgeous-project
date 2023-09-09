@@ -1,4 +1,5 @@
 import tkinter as tk
+import tkinter.ttk as ttk
 from tkVideoPlayer import TkinterVideo
 import os
 import threading
@@ -14,16 +15,19 @@ class MainApp(tk.Tk):
 
         self.settings = settings.Settings()
 
-        rtsp_url = "rtsp://username:spying_on_foxes@192.168.0.211:554/stream1"
+        rtsp_url = self.settings.get('Camera url')
         self.cam_end = threading.Event()
         self.db = dbutils.Database()
         self.cam = camutils.Camera(rtsp_url, self.db, log=True)
         self.cam_thread = threading.Thread(target=self.cam.start, args=(self.cam_end,))
+        if self.settings.get('Autostart camera'):
+            self.start_camera()
 
         # Minimum width & height for the window
-        self.MIN_WIDTH = 700
-        self.MIN_HEIGHT = 550
-        self.minsize(self.MIN_WIDTH, self.MIN_HEIGHT)
+        resolution = self.settings.get('Window resolution').split('x')
+        MIN_WIDTH = int(resolution[0])
+        MIN_HEIGHT = int(resolution[1])
+        self.minsize(MIN_WIDTH, MIN_HEIGHT)
 
         self.resizable(width=False, height=False)
         self.title(title)
@@ -102,8 +106,11 @@ class SettingsMenu(tk.Frame):
         self.bottomFrame = tk.Frame(self) # Frame containing "Apply", "Restart camera" buttons at the bottom
         self.bottomFrame.grid(row=1, column=0, pady=30, sticky='w')
 
+        self.restartInfoLabel = tk.Label(self, pady=8, text='Some changes may take effect only after restart', fg='red')
+        self.restartInfoLabel.grid(row=2, column=0, sticky='w')
+
         self.settingsWidgets = [] # List of pairs of all settings and their respective names
-        self.settings_per_column = 2 # Max number of settings per column in settingsFrame
+        self.settings_per_column = 6 # Max number of settings per column in settingsFrame
         self.settings_pady = 10
         self.settings_padx = 30
 
@@ -114,8 +121,10 @@ class SettingsMenu(tk.Frame):
         self.restartCamButton = tk.Button(self.bottomFrame, text="Restart camera", command=self.master.restart_camera)
         self.restartCamButton.grid(column=1, row=0)
 
-        self.add_setting(tk.Entry, 'test', width=10)
-        self.add_setting(tk.Checkbutton, 'test2', text='kwargs test')
+        self.add_setting(tk.Entry, 'Camera url', width=50)
+        self.add_setting(ttk.Combobox, 'Window resolution', width=9, values=["640x480", "800x600", 
+                                                                             "1600x900",   "1920x1080"])
+        self.add_setting(tk.Checkbutton, 'Autostart camera')
 
     # Adds a setting to settingsFrame
     def add_setting(self, setting_class: tk.Widget, setting_name, *args, **kwargs):
@@ -146,6 +155,9 @@ class SettingsMenu(tk.Frame):
         if setting_class == tk.Checkbutton:
             var.set(self.settings.get(setting_name))
             setting_instance = var # Access to Checkbutton is provided via linked variables, so only those are needed
+        
+        if setting_class == ttk.Combobox:
+            setting_instance.set(self.settings.get(setting_name))
 
         frame.grid(row=row, column=column, padx=self.settings_padx, pady=self.settings_pady, sticky='w')
 
