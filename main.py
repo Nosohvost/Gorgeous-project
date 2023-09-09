@@ -21,8 +21,8 @@ class MainApp(tk.Tk):
         self.cam_thread = threading.Thread(target=self.cam.start, args=(self.cam_end,))
 
         # Minimum width & height for the window
-        self.MIN_WIDTH = 450
-        self.MIN_HEIGHT = 450
+        self.MIN_WIDTH = 700
+        self.MIN_HEIGHT = 550
         self.minsize(self.MIN_WIDTH, self.MIN_HEIGHT)
 
         self.resizable(width=False, height=False)
@@ -100,36 +100,62 @@ class SettingsMenu(tk.Frame):
         self.settingsFrame = tk.Frame(self) # Frame containing settings themselves
         self.settingsFrame.grid(row=0, column=0)
         self.bottomFrame = tk.Frame(self) # Frame containing "Apply", "Restart camera" buttons at the bottom
-        self.bottomFrame.grid(row=1, column=0)
+        self.bottomFrame.grid(row=1, column=0, pady=30, sticky='w')
 
-        self.settingsWidgets = [] # List of all entries, checkboxes etc
+        self.settingsWidgets = [] # List of pairs of all settings and their respective names
         self.settings_per_column = 2 # Max number of settings per column in settingsFrame
         self.settings_pady = 10
         self.settings_padx = 30
 
         
-        self.applyButton = tk.Button(self.bottomFrame, text='Apply', command=self.settings.apply)
-        self.applyButton.grid(column=0, row=0)
+        self.applyButton = tk.Button(self.bottomFrame, text='Apply', command=self.apply_settings)
+        self.applyButton.grid(column=0, row=0, padx=self.settings_padx)
 
         self.restartCamButton = tk.Button(self.bottomFrame, text="Restart camera", command=self.master.restart_camera)
         self.restartCamButton.grid(column=1, row=0)
 
-        self.add_setting(tk.Button, text='test button')
-        for i in range(4):
-            self.add_setting(tk.Label, text=f'test label {i}')
+        self.add_setting(tk.Entry, 'test', width=10)
+        self.add_setting(tk.Checkbutton, 'test2', text='kwargs test')
 
-    def add_setting(self, setting_class: tk.Widget, *args, **kwargs):
-        # Create a tkinter object
-        new_instance = setting_class(self.settingsFrame, *args, **kwargs)
+    # Adds a setting to settingsFrame
+    def add_setting(self, setting_class: tk.Widget, setting_name, *args, **kwargs):
+        # Tweak some arguments based a the setting class
+        if setting_class == tk.Checkbutton:
+            # Tkinter requires a variable assigned to Checkbutton instances
+            var = tk.IntVar()
+            kwargs['variable'] = var
 
-        # Get number of settings and calculate row & column
+        # Create a frame and a label for the setting
+        frame = tk.Frame(self.settingsFrame)
+        label = tk.Label(frame, text=setting_name + ':\t')
+        label.grid(row=0, column=0, padx=5)
+    
+        setting_instance = setting_class(frame, *args, **kwargs) # Create an instance of tkinter widget
+        setting_instance.grid(row=0, column=1)
+
+        # Get number of settings to calculate row & column and place the widget
         n = len(self.settingsWidgets) 
         column = n // self.settings_per_column
         row = n % self.settings_per_column
+        
 
-        # Place the new setting and add to the list
-        new_instance.grid(row=row, column=column, padx=self.settings_padx, pady=self.settings_pady)
-        self.settingsWidgets.append(new_instance)
+        # Insert current setting value
+        if setting_class == tk.Entry:
+            setting_instance.insert(0, self.settings.get(setting_name))
+
+        if setting_class == tk.Checkbutton:
+            var.set(self.settings.get(setting_name))
+            setting_instance = var # Access to Checkbutton is provided via linked variables, so only those are needed
+
+        frame.grid(row=row, column=column, padx=self.settings_padx, pady=self.settings_pady, sticky='w')
+
+        self.settingsWidgets.append((setting_instance, setting_name))
+
+    # Collect values in entries and save them
+    def apply_settings(self):
+        for widget, setting_name in self.settingsWidgets:
+            self.settings.set(setting_name, widget.get())
+        self.settings.apply()
 
 # Toolbar and video itself
 class VideoPlayer(tk.Frame):
