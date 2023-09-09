@@ -6,11 +6,13 @@ import tkinter.filedialog
 import tkinter.messagebox
 import pathlib
 import math
-from src import dbutils, camutils
+from src import dbutils, camutils, settings
 
 class MainApp(tk.Tk):
     def __init__(self, title='Fox spy', *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        self.settings = settings.Settings()
 
         rtsp_url = "rtsp://username:spying_on_foxes@192.168.0.211:554/stream1"
         self.cam_end = threading.Event()
@@ -27,7 +29,7 @@ class MainApp(tk.Tk):
         self.title(title)
 
         # Create main menu
-        self.mainMenu = MainMenu(self)
+        self.mainMenu = MainMenu(self, self.settings)
         self.mainMenu.grid(row=0, column=0, sticky='NE')
 
         # Current tab opened. By default is statistics tab
@@ -59,19 +61,20 @@ class MainApp(tk.Tk):
 
     def open_video_player(self):
         self.currentTab.destroy()
-        self.currentTab = VideoPlayer(self)
+        self.currentTab = VideoPlayer(self, self.settings)
         self.currentTab.grid(row=0, column=1)
 
     def open_settings(self):
         self.currentTab.destroy()
-        self.currentTab = SettingsMenu(self)
+        self.currentTab = SettingsMenu(self, self.settings)
         self.currentTab.grid(row=0, column=1)
 
 
 # Main menu in top left corner
 class MainMenu(tk.Frame):
-    def __init__(self, master, *args, **kwargs):
+    def __init__(self, master, settings: settings.Settings, *args, **kwargs):
         super().__init__(master, *args, **kwargs)
+        self.settings = settings
 
         # Creating buttons
         self.plotButton = tk.Button(self, text='Show plot', command=master.open_statistics_menu)
@@ -89,17 +92,51 @@ class PlotCreator(tk.Frame):
     pass
 
 class SettingsMenu(tk.Frame):
-    def __init__(self, master, *args, **kwargs):
+    def __init__(self, master, settings: settings.Settings, *args, **kwargs):
         super().__init__(master, *args, **kwargs)
         self.master = master
+        self.settings = settings
 
-        self.resetCamButton = tk.Button(self, text="restart the cam", command=self.master.restart_camera)
-        self.resetCamButton.grid(column=0, row=0)
+        self.settingsFrame = tk.Frame(self) # Frame containing settings themselves
+        self.settingsFrame.grid(row=0, column=0)
+        self.bottomFrame = tk.Frame(self) # Frame containing "Apply", "Restart camera" buttons at the bottom
+        self.bottomFrame.grid(row=1, column=0)
+
+        self.settingsWidgets = [] # List of all entries, checkboxes etc
+        self.settings_per_column = 2 # Max number of settings per column in settingsFrame
+        self.settings_pady = 10
+        self.settings_padx = 30
+
+        
+        self.applyButton = tk.Button(self.bottomFrame, text='Apply', command=self.settings.apply)
+        self.applyButton.grid(column=0, row=0)
+
+        self.restartCamButton = tk.Button(self.bottomFrame, text="Restart camera", command=self.master.restart_camera)
+        self.restartCamButton.grid(column=1, row=0)
+
+        self.add_setting(tk.Button, text='test button')
+        for i in range(4):
+            self.add_setting(tk.Label, text=f'test label {i}')
+
+    def add_setting(self, setting_class: tk.Widget, *args, **kwargs):
+        # Create a tkinter object
+        new_instance = setting_class(self.settingsFrame, *args, **kwargs)
+
+        # Get number of settings and calculate row & column
+        n = len(self.settingsWidgets) 
+        column = n // self.settings_per_column
+        row = n % self.settings_per_column
+
+        # Place the new setting and add to the list
+        new_instance.grid(row=row, column=column, padx=self.settings_padx, pady=self.settings_pady)
+        self.settingsWidgets.append(new_instance)
 
 # Toolbar and video itself
 class VideoPlayer(tk.Frame):
-    def __init__(self, master, *args, **kwargs):
+    def __init__(self, master, settings: settings.Settings, *args, **kwargs):
         super().__init__(master, *args, **kwargs)
+        self.settings = settings
+
         self.VIDEO_HEIGHT = 432
         self.VIDEO_WIDTH = 768
 
