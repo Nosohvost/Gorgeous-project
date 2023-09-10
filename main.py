@@ -8,6 +8,10 @@ import tkinter.messagebox
 import pathlib
 import math
 from src import dbutils, camutils, settings
+from matplotlib import pyplot as plt
+from matplotlib.backends import backend_tkagg as plt_backend
+import datetime
+
 
 class MainApp(tk.Tk):
     def __init__(self, title='Fox spy', *args, **kwargs):
@@ -36,8 +40,8 @@ class MainApp(tk.Tk):
         self.mainMenu = MainMenu(self, self.settings)
         self.mainMenu.grid(row=0, column=0, sticky='NE')
 
-        # Current tab opened. By default is statistics tab
-        self.currentTab = Placeholder(self, bg='red')
+        # Open statistics menu
+        self.currentTab = StatisticsMenu(self, self.settings, self.db)
         self.currentTab.grid(row=0, column=1)
 
     # Starts the camera if it's not working
@@ -60,7 +64,7 @@ class MainApp(tk.Tk):
 
     def open_statistics_menu(self):
         self.currentTab.destroy()
-        self.currentTab = Placeholder(self, bg='red')
+        self.currentTab = StatisticsMenu(self, self.settings, self.db)
         self.currentTab.grid(row=0, column=1)
 
     def open_video_player(self):
@@ -73,6 +77,11 @@ class MainApp(tk.Tk):
         self.currentTab = SettingsMenu(self, self.settings)
         self.currentTab.grid(row=0, column=1)
 
+    # Called when top right corner close button is pressed
+    def close(self):
+        plt.close('all')
+        self.destroy()
+
 
 # Main menu in top left corner
 class MainMenu(tk.Frame):
@@ -81,7 +90,7 @@ class MainMenu(tk.Frame):
         self.settings = settings
 
         # Creating buttons
-        self.plotButton = tk.Button(self, text='Show plot', command=master.open_statistics_menu)
+        self.plotButton = tk.Button(self, text='Statistics', command=master.open_statistics_menu)
         self.videosButton = tk.Button(self, text='Saved videos', command=master.open_video_player) 
         self.settingsButton = tk.Button(self, text='Settings', command=master.open_settings)
 
@@ -92,13 +101,79 @@ class MainMenu(tk.Frame):
         self.videosButton.grid(row=1, column=0, ipady=self.buttons_ipady, pady=self.buttons_pady)
         self.settingsButton.grid(row=2, column=0, ipady=self.buttons_ipady, pady=self.buttons_pady)
 
-class PlotCreator(tk.Frame):
-    pass
+class StatisticsMenu(tk.Frame):
+    def __init__(self, master, settings: settings.Settings, database: dbutils.Database, *args, **kwargs):
+        super().__init__(master, *args, **kwargs)
+        self.settings = settings
+        self.db = database
+        self.plot_size = (7, 4) # Plot size in inches
+
+        self.plotFrame = tk.Frame(self, width=500, height=500, bg='red')
+        self.statsFrame = tk.Frame(self, width=500, height=200, bg='green')
+        self.plotFrame.grid(row=0, column=0)
+        self.statsFrame.grid(row=1, column=0, pady=30)
+
+        self.create_fig()
+
+        self.plot('Fox', 3600*24, 'r')
+        self.plot('Cat', 3600*24, 'b')
+
+    # Get data as a dict of <Date>: <number of occurrences> pairs for both foxes and cats
+    # Rounds date to nearest n seconds
+    def records_to_dict(self, records, round_sec):
+        data = {'Fox': {},
+                'Cat': {}}
+        for row in records:
+            dict = data[row['Label']]
+            time = round(int(row['Unix time']) / round_sec) * round_sec # Round the time
+            if time not in dict:
+                dict[time] = 1
+            else:
+                dict[time] += 1            
+
+        return data
+    
+    # Create matplotlib figure, tkinter canvas and toolbar
+    def create_fig(self):
+        self.fig = plt.figure(figsize=self.plot_size, dpi=100)
+        self.fig_canvas = plt_backend.FigureCanvasTkAgg(self.fig, self.plotFrame)
+        self.toolbar = plt_backend.NavigationToolbar2Tk(self.fig_canvas, self.plotFrame)
+
+        self.fig_canvas.get_tk_widget().pack()
+
+    # Draw a plot using matplotlib
+    # Rounds time to n seconds
+    def plot(self, label, round_sec, color):
+        # Get data
+        records = self.db.read_records()
+        records_dict = self.records_to_dict(records, round_sec)
+        records_dict = records_dict[label]
+
+        # Determine boundaries of the plot
+        min_time = min(records_dict)
+        max_time = max(records_dict) 
+
+        # Create x and y axis
+        x = []
+        y = []
+        for time in range(min_time, max_time + 1, round_sec):
+            x.append(datetime.datetime.fromtimestamp(time))
+            if time not in records_dict:
+                y.append(0)
+            else:
+                y.append(records_dict[time])
+        
+        plt.plot(x, y, color=color, label=label)
+        plt.legend()
+
+        self.fig_canvas.draw()
+        self.toolbar.update()
+        
+
 
 class SettingsMenu(tk.Frame):
     def __init__(self, master, settings: settings.Settings, *args, **kwargs):
         super().__init__(master, *args, **kwargs)
-        self.master = master
         self.settings = settings
 
         self.settingsFrame = tk.Frame(self) # Frame containing settings themselves
@@ -114,7 +189,7 @@ class SettingsMenu(tk.Frame):
         self.settings_pady = 10
         self.settings_padx = 30
 
-        
+
         self.applyButton = tk.Button(self.bottomFrame, text='Apply', command=self.apply_settings)
         self.applyButton.grid(column=0, row=0, padx=self.settings_padx)
 
@@ -340,6 +415,7 @@ class Placeholder(tk.Frame):
 
 def main():
     window = MainApp()
+    window.protocol('WM_DELETE_WINDOW', window.close)
     window.mainloop()
 
 if __name__ == '__main__':

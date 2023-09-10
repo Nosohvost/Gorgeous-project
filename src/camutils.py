@@ -8,7 +8,6 @@ import cv2 as cv
 import threading
 import numpy as np
 from src import dbutils
-from datetime import datetime
 import time
 
 LEARNER_PATH = './NN.pkl'
@@ -65,7 +64,7 @@ class Camera():
     def __init__(self, rtsp_url, database, log=False):
         self.rtsp_url = rtsp_url
         self.classifier = Classifier()
-        self.database = database
+        self.db = database
         self.log = log
 
         # Fps in saved videos
@@ -154,15 +153,18 @@ class Camera():
         pred = self.classifier.classify_video(frames)
         self.print_log(f'Object labeled as {pred}')
         
-        if pred == 'Empty':
+        # Save only cats and foxes
+        if pred not in ('Cat', 'Fox'):
             return
         
-        absolute_time = int(time.time()) # Time in seconds since 1 January 1970
-        formatted_time = time.strftime("%d/%m/%y %Hh:%Mm:%Ss") # Date in human-readable format
+        unix_time = time.time()
+        formatted_time = time.strftime("%d/%m/%y %H:%M:%S") # Date in more human-readable format
         file_name_time = time.strftime("%d-%m-%y %Hh %Mm %Ss") # Time for file name
         video_name = pred + " " + file_name_time
-        db.write_record([absolute_time, formatted_time, pred])
-        db.save_video(frames, video_name, self.fps)
+        self.db.write_record({'Unix time': unix_time, 
+                              'Date': formatted_time, 
+                              'Label': pred})
+        self.db.save_video(frames, video_name, self.fps)
 
 
 # Testing

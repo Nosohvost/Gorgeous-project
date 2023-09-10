@@ -2,6 +2,9 @@ import csv
 import threading
 import cv2 as cv
 import os
+import pandas as pd
+import random
+import time
 
 DATABASE_PATH = './database.csv'
 VIDEOS_PATH = './videos/'
@@ -11,24 +14,26 @@ class Database():
     def __init__(self, log=False):
         self.lock = threading.Lock()
         self.log = log
+        self.header = ['Unix time', 'Date', 'Label']
 
     def print_log(self, message):
         if self.log:
             print(message)
 
     # Save a record into the end of csv file
-    def write_record(self, record: list):
+    def write_record(self, record: dict):
         # Acquire the lock to prevent a race condition and open the database
         with self.lock, open(DATABASE_PATH, 'a', newline='') as file: 
-            writer = csv.writer(file, delimiter=' ', quoting=csv.QUOTE_MINIMAL)
+            writer = csv.DictWriter(file, delimiter=',', 
+                                    quoting=csv.QUOTE_MINIMAL, fieldnames=self.header)
             writer.writerow(record)
 
-    # Get a list of all records
+    # Get records as a list of dictionaries
     def read_records(self):
         records = []
         # Acquire the lock to prevent a race condition and open the database
         with self.lock, open(DATABASE_PATH, 'r', newline='') as file:
-            reader = csv.reader(file, delimiter=' ', quoting=csv.QUOTE_MINIMAL)
+            reader = csv.DictReader(file, delimiter=',', quoting=csv.QUOTE_MINIMAL)
             for row in reader:
                 records.append(row)
         return records
@@ -52,20 +57,36 @@ class Database():
 
     # Delete the database
     def delete_database(self):
-        with self.lock, open(DATABASE_PATH, 'w'):
+        with self.lock, open(DATABASE_PATH, 'w') as file:
+            writer = csv.DictWriter(file, delimiter=',', 
+                                    quoting=csv.QUOTE_MINIMAL, fieldnames=self.header)
+            writer.writeheader()
             print('Database deleted')
+
+    # Put random entries in database
+    def random_database(self, n):
+        self.delete_database()
+        for i in range(n):
+            unix_time = random.randint(0, 1000000)
+            date = 'N/A'
+            label = random.choice(['Fox', 'Cat'])
+            self.write_record({'Unix time': unix_time,
+                               'Date': date,
+                               'Label': label})
+            
 
 # Testing
 if __name__ == "__main__":
     DATABASE_PATH = '../database.csv'
     VIDEOS_PATH = '../videos/'
     db = Database(log=True)
-    db.write_record(['first', 'second', 345])
-    db.write_record([''])
-    db.write_record(['''this is a loooooooooooong sentence!'''])
+    
+    if input("WARNING: the database will be deleted. Are you sure you want to proceed? ").lower() !=  "yes":
+        quit()
 
-    print(db.read_records())
     db.delete_database()
+    db.write_record({'Unix time': 123, 'Date': '01/02/23 13:31:10', 'Label': 'Monster'})
+    db.write_record({'Unix time': 456789, 'Date': '24/12/23 19:53:14', 'Label': 'Santa'})
     print(db.read_records())
     
     print('Reading rtsp stream')
