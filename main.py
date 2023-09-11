@@ -11,6 +11,7 @@ from src import dbutils, camutils, settings
 from matplotlib import pyplot as plt
 from matplotlib.backends import backend_tkagg as plt_backend
 import datetime
+import time
 
 
 class MainApp(tk.Tk):
@@ -107,6 +108,7 @@ class StatisticsMenu(tk.Frame):
         self.settings = settings
         self.db = database
         self.plot_size = (7, 4) # Plot size in inches
+        self.labels = ['Fox', 'Cat']
 
         self.plotFrame = tk.Frame(self, width=500, height=500, bg='red')
         self.statsFrame = tk.Frame(self, width=500, height=200, bg='green')
@@ -115,14 +117,16 @@ class StatisticsMenu(tk.Frame):
 
         self.create_fig()
 
-        self.plot('Fox', 3600*24, 'r')
-        self.plot('Cat', 3600*24, 'b')
+        self.plot(3600*24)
+        self.toggle_grid()
+        self.toggle_graph('Cat', 'Show cats')
 
     # Get data as a dict of <Date>: <number of occurrences> pairs for both foxes and cats
     # Rounds date to nearest n seconds
     def records_to_dict(self, records, round_sec):
-        data = {'Fox': {},
-                'Cat': {}}
+        data = {}
+        for label in self.labels:
+            data[label] = {}
         for row in records:
             dict = data[row['Label']]
             time = round(int(row['Unix time']) / round_sec) * round_sec # Round the time
@@ -136,38 +140,65 @@ class StatisticsMenu(tk.Frame):
     # Create matplotlib figure, tkinter canvas and toolbar
     def create_fig(self):
         self.fig = plt.figure(figsize=self.plot_size, dpi=100)
+        plt.plot() # Create axes
+        self.ax = self.fig.axes[0]
         self.fig_canvas = plt_backend.FigureCanvasTkAgg(self.fig, self.plotFrame)
         self.toolbar = plt_backend.NavigationToolbar2Tk(self.fig_canvas, self.plotFrame)
+        
+        plt.xticks(rotation=45, ha='right') # Rotate time labels to make them more visible
+        self.fig.subplots_adjust(bottom=0.2) # Allocate more space for labels
 
-        self.fig_canvas.get_tk_widget().pack()
+        self.fig_canvas.get_tk_widget().pack() # Place the matplotlib widget in tkinter window
 
     # Draw a plot using matplotlib
     # Rounds time to n seconds
-    def plot(self, label, round_sec, color):
+    def plot(self, round_sec):
+        colors = ['r', 'b', 'g', 'y'] # Colors for plots
+
         # Get data
         records = self.db.read_records()
         records_dict = self.records_to_dict(records, round_sec)
-        records_dict = records_dict[label]
 
         # Determine boundaries of the plot
-        min_time = min(records_dict)
-        max_time = max(records_dict) 
+        min_time = 1e20
+        max_time = -1
+        for label_dict in records_dict.values():
+            min_time = min(min_time, min(label_dict))
+            max_time = max(max_time, max(label_dict))
 
-        # Create x and y axis
-        x = []
-        y = []
+
+        x = [] # Single x axis
+        y_axs = [] # Multiple y axes for each label
+        for label in records_dict:
+            y_axs.append([])
+
+        # Fill x and y axes
         for time in range(min_time, max_time + 1, round_sec):
             x.append(datetime.datetime.fromtimestamp(time))
-            if time not in records_dict:
-                y.append(0)
-            else:
-                y.append(records_dict[time])
+            for i, label in enumerate(records_dict):
+                if time not in records_dict[label]:
+                    y_axs[i].append(0) # Add 0 if no animals were detected at that time
+                else:
+                    y_axs[i].append(records_dict[label][time]) # Add number of animals detected at that time
         
-        plt.plot(x, y, color=color, label=label)
+        self.plots = {}
+        for i, label in enumerate(records_dict):
+            self.plots[label], = plt.plot(x, y_axs[i], color=colors[i], label=label)
+        
         plt.legend()
-
         self.fig_canvas.draw()
         self.toolbar.update()
+
+    # Show/hide grid depending on settings
+    def toggle_grid(self):
+        mode = self.settings.get('Grid')
+        self.ax.grid(mode)
+
+    # Show/hide one graph depending on settings
+    def toggle_graph(self, label, setting):
+        mode = self.settings.get(setting)
+        self.plots[label].set_visible(mode)
+        plt.legend()
         
 
 
