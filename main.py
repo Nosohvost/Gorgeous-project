@@ -110,16 +110,33 @@ class StatisticsMenu(tk.Frame):
         self.plot_size = (7, 4) # Plot size in inches
         self.labels = ['Fox', 'Cat']
 
-        self.plotFrame = tk.Frame(self, width=500, height=500, bg='red')
-        self.statsFrame = tk.Frame(self, width=500, height=200, bg='green')
-        self.plotFrame.grid(row=0, column=0)
-        self.statsFrame.grid(row=1, column=0, pady=30)
+        self.plotFrame = tk.Frame(self, width=500, height=500)
+        self.settingsWidgets = SettingsWidgets(self, settings, 2, 4, 8)
+        self.statsFrame = tk.Frame(self, width=500, height=100, bg='green')
+        self.bottomFrame = tk.Frame(self)
+
+        pady = 0
+        self.plotFrame.grid(row=0, column=0, pady=pady)
+        self.settingsWidgets.grid(row=1, column=0, pady=pady, sticky='w')
+        self.statsFrame.grid(row=2, column=0, pady=pady)
+        self.bottomFrame.grid(row=3, column=0)
+
+        self.applyButton = tk.Button(self.bottomFrame, text='Update', command=self.update)
+        self.applyButton.grid(row=0, column=0, sticky='w')
+
+        self.settingsWidgets.add_setting(tk.Checkbutton, "Show Fox", "Show foxes")
+        self.settingsWidgets.add_setting(tk.Checkbutton, "Show Cat", "Show cats")
 
         self.create_fig()
 
         self.plot(3600*24)
-        self.toggle_grid()
-        self.toggle_graph('Cat', 'Show cats')
+
+    # Update all settings and the graph
+    def update(self):
+        self.settingsWidgets.apply_settings() 
+        self.fig.clear()
+        self.plot(3600*24)
+
 
     # Get data as a dict of <Date>: <number of occurrences> pairs for both foxes and cats
     # Rounds date to nearest n seconds
@@ -145,7 +162,6 @@ class StatisticsMenu(tk.Frame):
         self.fig_canvas = plt_backend.FigureCanvasTkAgg(self.fig, self.plotFrame)
         self.toolbar = plt_backend.NavigationToolbar2Tk(self.fig_canvas, self.plotFrame)
         
-        plt.xticks(rotation=45, ha='right') # Rotate time labels to make them more visible
         self.fig.subplots_adjust(bottom=0.2) # Allocate more space for labels
 
         self.fig_canvas.get_tk_widget().pack() # Place the matplotlib widget in tkinter window
@@ -183,22 +199,18 @@ class StatisticsMenu(tk.Frame):
         
         self.plots = {}
         for i, label in enumerate(records_dict):
-            self.plots[label], = plt.plot(x, y_axs[i], color=colors[i], label=label)
+            show = self.settings.get("Show " + label)
+            if show:
+                self.plots[label], = plt.plot(x, y_axs[i], color=colors[i], label=label)
         
+        # Toggle grid
+        mode = self.settings.get('Grid')
+        self.ax.grid(mode)
+    
+        plt.xticks(rotation=45, ha='right') # Rotate time labels to make them more visible
         plt.legend()
         self.fig_canvas.draw()
         self.toolbar.update()
-
-    # Show/hide grid depending on settings
-    def toggle_grid(self):
-        mode = self.settings.get('Grid')
-        self.ax.grid(mode)
-
-    # Show/hide one graph depending on settings
-    def toggle_graph(self, label, setting):
-        mode = self.settings.get(setting)
-        self.plots[label].set_visible(mode)
-        plt.legend()
         
 
 
@@ -207,33 +219,48 @@ class SettingsMenu(tk.Frame):
         super().__init__(master, *args, **kwargs)
         self.settings = settings
 
-        self.settingsFrame = tk.Frame(self) # Frame containing settings themselves
-        self.settingsFrame.grid(row=0, column=0)
-        self.bottomFrame = tk.Frame(self) # Frame containing "Apply", "Restart camera" buttons at the bottom
-        self.bottomFrame.grid(row=1, column=0, pady=30, sticky='w')
+        settings_per_column = 6 # Max number of settings per column in settingsFrame
+        settings_pady = 8
+        settings_padx = 8
 
-        self.restartInfoLabel = tk.Label(self, pady=8, text='Some changes may take effect only after restart', fg='red')
-        self.restartInfoLabel.grid(row=2, column=0, sticky='w')
+        settingsFrame = SettingsWidgets(self, settings, settings_per_column, settings_pady, settings_padx) # Frame containing settings themselves
+        settingsFrame.grid(row=0, column=0)
+        bottomFrame = tk.Frame(self) # Frame containing "Apply", "Restart camera" buttons at the bottom
+        bottomFrame.grid(row=1, column=0, pady=30, sticky='w')
+
+        restartInfoLabel = tk.Label(self, pady=8, text='Some changes may take effect only after restart', fg='red')
+        restartInfoLabel.grid(row=2, column=0, sticky='w')
+
+        applyButton = tk.Button(bottomFrame, text='Apply', command=settingsFrame.apply_settings)
+        applyButton.grid(column=0, row=0, padx=settings_padx)
+
+        restartCamButton = tk.Button(bottomFrame, text="Restart camera", command=self.master.restart_camera)
+        restartCamButton.grid(column=1, row=0)
+
+        settingsFrame.add_setting(tk.Entry, 'Camera url', width=50)
+        settingsFrame.add_setting(ttk.Combobox, 'Window resolution', width=9, values=["640x480", "800x600", 
+                                                                             "1600x900",   "1920x1080"])
+        settingsFrame.add_setting(tk.Checkbutton, 'Autostart camera')
+
+
+# Frame with settings and convenient functions for creating them
+class SettingsWidgets(tk.Frame):
+    def __init__(self, master, settings: settings.Settings, 
+                 settings_per_column, pady, padx,
+                 *args, **kwargs):
+        super().__init__(master, *args, **kwargs)
+        self.settings = settings
 
         self.settingsWidgets = [] # List of pairs of all settings and their respective names
-        self.settings_per_column = 6 # Max number of settings per column in settingsFrame
-        self.settings_pady = 10
-        self.settings_padx = 30
-
-
-        self.applyButton = tk.Button(self.bottomFrame, text='Apply', command=self.apply_settings)
-        self.applyButton.grid(column=0, row=0, padx=self.settings_padx)
-
-        self.restartCamButton = tk.Button(self.bottomFrame, text="Restart camera", command=self.master.restart_camera)
-        self.restartCamButton.grid(column=1, row=0)
-
-        self.add_setting(tk.Entry, 'Camera url', width=50)
-        self.add_setting(ttk.Combobox, 'Window resolution', width=9, values=["640x480", "800x600", 
-                                                                             "1600x900",   "1920x1080"])
-        self.add_setting(tk.Checkbutton, 'Autostart camera')
+        self.settings_per_column = settings_per_column # Max number of settings per column in settingsFrame
+        self.settings_pady = pady
+        self.settings_padx = padx
 
     # Adds a setting to settingsFrame
-    def add_setting(self, setting_class: tk.Widget, setting_name, *args, **kwargs):
+    def add_setting(self, setting_class: tk.Widget, setting_name, text=None, *args, **kwargs):
+        if text == None:
+            text = setting_name
+
         # Tweak some arguments based a the setting class
         if setting_class == tk.Checkbutton:
             # Tkinter requires a variable assigned to Checkbutton instances
@@ -241,8 +268,8 @@ class SettingsMenu(tk.Frame):
             kwargs['variable'] = var
 
         # Create a frame and a label for the setting
-        frame = tk.Frame(self.settingsFrame)
-        label = tk.Label(frame, text=setting_name + ':\t')
+        frame = tk.Frame(self)
+        label = tk.Label(frame, text=text + ':\t')
         label.grid(row=0, column=0, padx=5)
     
         setting_instance = setting_class(frame, *args, **kwargs) # Create an instance of tkinter widget
