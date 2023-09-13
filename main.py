@@ -11,8 +11,10 @@ from src import dbutils, camutils, settings
 from matplotlib import pyplot as plt
 from matplotlib.backends import backend_tkagg as plt_backend
 import datetime
-import time
+import time as time_lib
+import matplotlib.dates as plt_dates
 
+INF = int(1e20)
 
 class MainApp(tk.Tk):
     def __init__(self, title='Fox spy', *args, **kwargs):
@@ -111,7 +113,7 @@ class StatisticsMenu(tk.Frame):
         self.labels = ['Fox', 'Cat']
 
         self.plotFrame = tk.Frame(self, width=500, height=500)
-        self.settingsWidgets = SettingsWidgets(self, settings, 2, 4, 8)
+        self.settingsWidgets = SettingsWidgets(self, settings, 4, 2, 5)
         self.statsFrame = tk.Frame(self, width=500, height=100, bg='green')
         self.bottomFrame = tk.Frame(self)
 
@@ -124,59 +126,111 @@ class StatisticsMenu(tk.Frame):
         self.applyButton = tk.Button(self.bottomFrame, text='Update', command=self.update)
         self.applyButton.grid(row=0, column=0, sticky='w')
 
+        self.settingsWidgets.add_setting(tk.Checkbutton, "Grid", "Show grid")
         self.settingsWidgets.add_setting(tk.Checkbutton, "Show Fox", "Show foxes")
         self.settingsWidgets.add_setting(tk.Checkbutton, "Show Cat", "Show cats")
+        self.settingsWidgets.add_setting(tk.Checkbutton, "Show average")
+        self.settingsWidgets.add_setting(ttk.Combobox, "Time periods", values=["Hours",
+                                                                               "Days",
+                                                                               "Weeks",
+                                                                               "Months"], state="readonly")
+        self.settingsWidgets.add_setting(tk.Entry, "Plot start", "Start date (dd/mm/yy)", width=8)
+        self.settingsWidgets.add_setting(tk.Entry, "Plot end", "End date (dd/mm/yy)", width=8)
+
+        self.settingsWidgets.add_setting(tk.Label, None, text="Leave start/end dates empty\nto include everything", fg='red')
 
         self.create_fig()
 
-        self.plot(3600*24)
+        self.plot()
 
     # Update all settings and the graph
     def update(self):
         self.settingsWidgets.apply_settings() 
         self.fig.clear()
-        self.plot(3600*24)
+        self.plot()
 
 
     # Get data as a dict of <Date>: <number of occurrences> pairs for both foxes and cats
-    # Rounds date to nearest n seconds
-    def records_to_dict(self, records, round_sec):
+    # Rounds date to nearest n seconds and averages across m second periods
+    def records_to_dict(self, records, round_sec, average_period, start=None, end=None):
         data = {}
+        # Include everything if not stated otherwise
+        if start == None:
+            start = INF
+            for row in records:
+                start = min(start, int(row['Unix time']))
+        if end == None:
+            end = time_lib.time()
+        
+        # Check that averaging is turned on
+        if average_period != INF:
+            average_divisor = (end - start) / average_period
+        else:
+            average_divisor = 1
+
         for label in self.labels:
             data[label] = {}
         for row in records:
+            unix_time = int(row['Unix time'])
+            # Skip if out of needed time period
+            if unix_time < start or end < unix_time:
+                continue
             dict = data[row['Label']]
-            time = round(int(row['Unix time']) / round_sec) * round_sec # Round the time
+            time = round(unix_time / round_sec) * round_sec # Round the time
+            time %= average_period
             if time not in dict:
-                dict[time] = 1
-            else:
-                dict[time] += 1            
-
+                dict[time] = 0
+            dict[time] += 1 / average_divisor
+        
         return data
     
     # Create matplotlib figure, tkinter canvas and toolbar
     def create_fig(self):
         self.fig = plt.figure(figsize=self.plot_size, dpi=100)
         plt.plot() # Create axes
-        self.ax = self.fig.axes[0]
         self.fig_canvas = plt_backend.FigureCanvasTkAgg(self.fig, self.plotFrame)
         self.toolbar = plt_backend.NavigationToolbar2Tk(self.fig_canvas, self.plotFrame)
         
         self.fig.subplots_adjust(bottom=0.2) # Allocate more space for labels
-
         self.fig_canvas.get_tk_widget().pack() # Place the matplotlib widget in tkinter window
+
+    # Returns unix time from human-readable time format
+    def str_time_to_unix(self, time):
+        if time == "":
+            return None
+        else:
+            date = datetime.datetime.strptime(time, "%d/%m/%y") # datetime object
+            unix = time_lib.mktime(date.timetuple())
+            return unix
 
     # Draw a plot using matplotlib
     # Rounds time to n seconds
-    def plot(self, round_sec):
+    def plot(self):
+        start = self.str_time_to_unix(self.settings.get("Plot start"))
+        end = self.str_time_to_unix(self.settings.get("Plot end"))
+
         colors = ['r', 'b', 'g', 'y'] # Colors for plots
+        periods = ["Hours", "Days", "Weeks", "Months", "Years"]
+        periods_to_seconds = {"Hours" : 3600,
+                              "Days"  : 3600 * 24,
+                              "Weeks" : 3600 * 24 * 7,
+                              "Months": 3600 * 24 * 30,
+                              "Years" : 3600 * 24 * 365}
+        time_periods = self.settings.get("Time periods")
+        round_sec = periods_to_seconds[time_periods]
+        if (self.settings.get("Show average")):
+            # Pick one period above. For example, hours will be averaged across all days
+            average_period_str = periods[periods.index(time_periods) + 1]
+            average_period = periods_to_seconds[average_period_str]
+        else:
+            average_period = INF
 
         # Get data
         records = self.db.read_records()
-        records_dict = self.records_to_dict(records, round_sec)
+        records_dict = self.records_to_dict(records, round_sec, average_period, start, end)
 
         # Determine boundaries of the plot
-        min_time = 1e20
+        min_time = INF
         max_time = -1
         for label_dict in records_dict.values():
             min_time = min(min_time, min(label_dict))
@@ -205,9 +259,10 @@ class StatisticsMenu(tk.Frame):
         
         # Toggle grid
         mode = self.settings.get('Grid')
-        self.ax.grid(mode)
+        plt.grid(mode)
     
-        plt.xticks(rotation=45, ha='right') # Rotate time labels to make them more visible
+        ax = self.fig.axes[0]
+        ax.xaxis.set_major_formatter(plt_dates.ConciseDateFormatter(ax.xaxis.get_major_locator()))
         plt.legend()
         self.fig_canvas.draw()
         self.toolbar.update()
@@ -267,6 +322,17 @@ class SettingsWidgets(tk.Frame):
             var = tk.IntVar()
             kwargs['variable'] = var
 
+        # Get number of settings to calculate row & column and place the widget
+        n = len(self.settingsWidgets) 
+        column = n // self.settings_per_column
+        row = n % self.settings_per_column
+
+        # If it is a label, skip all other steps
+        if setting_class == tk.Label:
+            label = setting_class(self, text=text, *args, **kwargs)
+            label.grid(row=row, column=column)
+            return
+
         # Create a frame and a label for the setting
         frame = tk.Frame(self)
         label = tk.Label(frame, text=text + ':\t')
@@ -274,12 +340,6 @@ class SettingsWidgets(tk.Frame):
     
         setting_instance = setting_class(frame, *args, **kwargs) # Create an instance of tkinter widget
         setting_instance.grid(row=0, column=1)
-
-        # Get number of settings to calculate row & column and place the widget
-        n = len(self.settingsWidgets) 
-        column = n // self.settings_per_column
-        row = n % self.settings_per_column
-        
 
         # Insert current setting value
         if setting_class == tk.Entry:

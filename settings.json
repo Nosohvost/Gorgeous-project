@@ -4,7 +4,11 @@
     "Window width": "800",
     "Window height": "600",
     "Window resolution": "1600x900",
-    "Grid": true,
+    "Grid": 0,
     "Show Fox": 1,
-    "Show Cat": 1
+    "Show Cat": 0,
+    "Time periods": "Days",
+    "Show average": 0,
+    "Plot start": "01/07/71",
+    "Plot end": "03/08/71"
 }

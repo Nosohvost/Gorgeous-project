@@ -67,7 +67,7 @@ class Database():
     def random_database(self, n):
         self.delete_database()
         for i in range(n):
-            unix_time = random.randint(0, 1000000)
+            unix_time = random.randint(0, 50000000)
             date = 'N/A'
             label = random.choice(['Fox', 'Cat'])
             self.write_record({'Unix time': unix_time,
