@@ -13,6 +13,7 @@ from matplotlib.backends import backend_tkagg as plt_backend
 import datetime
 import time as time_lib
 import matplotlib.dates as plt_dates
+import numpy as np
 
 INF = int(1e20)
 
@@ -111,21 +112,23 @@ class StatisticsMenu(tk.Frame):
         self.db = database
         self.plot_size = (7, 4) # Plot size in inches
         self.labels = ['Fox', 'Cat']
+        self.y_axs = []
 
         self.plotFrame = tk.Frame(self, width=500, height=500)
         self.settingsWidgets = SettingsWidgets(self, settings, 4, 2, 5)
-        self.statsFrame = tk.Frame(self, width=500, height=100, bg='green')
+        self.statsLabels = Statistics(self, self.labels, 4, 8, 20)
         self.bottomFrame = tk.Frame(self)
 
         pady = 0
         self.plotFrame.grid(row=0, column=0, pady=pady)
         self.settingsWidgets.grid(row=1, column=0, pady=pady, sticky='w')
-        self.statsFrame.grid(row=2, column=0, pady=pady)
+        self.statsLabels.grid(row=2, column=0, pady=pady, sticky='w')
         self.bottomFrame.grid(row=3, column=0)
 
         self.applyButton = tk.Button(self.bottomFrame, text='Update', command=self.update)
         self.applyButton.grid(row=0, column=0, sticky='w')
 
+        # Add settings
         self.settingsWidgets.add_setting(tk.Checkbutton, "Grid", "Show grid")
         self.settingsWidgets.add_setting(tk.Checkbutton, "Show Fox", "Show foxes")
         self.settingsWidgets.add_setting(tk.Checkbutton, "Show Cat", "Show cats")
@@ -136,18 +139,23 @@ class StatisticsMenu(tk.Frame):
                                                                                "Months"], state="readonly")
         self.settingsWidgets.add_setting(tk.Entry, "Plot start", "Start date (dd/mm/yy)", width=8)
         self.settingsWidgets.add_setting(tk.Entry, "Plot end", "End date (dd/mm/yy)", width=8)
-
         self.settingsWidgets.add_setting(tk.Label, None, text="Leave start/end dates empty\nto include everything", fg='red')
 
-        self.create_fig()
+        # Add stats
+        self.statsLabels.add_stat("Mean", np.mean)
+        self.statsLabels.add_stat("Median", np.median)
+        self.statsLabels.add_stat("Max", np.max)
+        self.statsLabels.add_stat("Total", np.sum)
 
-        self.plot()
+        self.create_fig()
+        self.update()
 
     # Update all settings and the graph
     def update(self):
         self.settingsWidgets.apply_settings() 
         self.fig.clear()
         self.plot()
+        self.statsLabels.update_stats(self.y_axs)
 
 
     # Get data as a dict of <Date>: <number of occurrences> pairs for both foxes and cats
@@ -238,25 +246,26 @@ class StatisticsMenu(tk.Frame):
 
 
         x = [] # Single x axis
-        y_axs = [] # Multiple y axes for each label
+        y_axs = {} # Multiple y axes for each label
         for label in records_dict:
-            y_axs.append([])
+            y_axs[label] = []
 
         # Fill x and y axes
         for time in range(min_time, max_time + 1, round_sec):
             x.append(datetime.datetime.fromtimestamp(time))
-            for i, label in enumerate(records_dict):
+            for label in records_dict:
                 if time not in records_dict[label]:
-                    y_axs[i].append(0) # Add 0 if no animals were detected at that time
+                    y_axs[label].append(0) # Add 0 if no animals were detected at that time
                 else:
-                    y_axs[i].append(records_dict[label][time]) # Add number of animals detected at that time
+                    y_axs[label].append(records_dict[label][time]) # Add number of animals detected at that time
         
         self.plots = {}
         for i, label in enumerate(records_dict):
             show = self.settings.get("Show " + label)
             if show:
-                self.plots[label], = plt.plot(x, y_axs[i], color=colors[i], label=label)
-        
+                self.plots[label], = plt.plot(x, y_axs[label], color=colors[i], label=label)
+        self.y_axs = y_axs
+
         # Toggle grid
         mode = self.settings.get('Grid')
         plt.grid(mode)
@@ -266,7 +275,6 @@ class StatisticsMenu(tk.Frame):
         plt.legend()
         self.fig_canvas.draw()
         self.toolbar.update()
-        
 
 
 class SettingsMenu(tk.Frame):
@@ -293,8 +301,10 @@ class SettingsMenu(tk.Frame):
         restartCamButton.grid(column=1, row=0)
 
         settingsFrame.add_setting(tk.Entry, 'Camera url', width=50)
-        settingsFrame.add_setting(ttk.Combobox, 'Window resolution', width=9, values=["640x480", "800x600", 
-                                                                             "1600x900",   "1920x1080"])
+        settingsFrame.add_setting(ttk.Combobox, 'Window resolution', width=9, values=["640x480", 
+                                                                                      "800x600", 
+                                                                                      "1600x900",  
+                                                                                      "1920x1080"])
         settingsFrame.add_setting(tk.Checkbutton, 'Autostart camera')
 
 
@@ -361,6 +371,44 @@ class SettingsWidgets(tk.Frame):
         for widget, setting_name in self.settingsWidgets:
             self.settings.set(setting_name, widget.get())
         self.settings.apply()
+
+class Statistics(tk.Frame):
+    def __init__(self, master, labels,
+                 stats_per_column, pady, padx,
+                 *args, **kwargs):
+        super().__init__(master, *args, **kwargs)
+        self.labels = labels
+        self.stats_per_column = stats_per_column # Max number of settings per column in settingsFrame
+        self.pady = pady
+        self.padx = padx
+
+        self.stats = [] # List of tuples (tk.Label, label, func)
+
+    def add_stat(self, name, func):
+        # Calculate row & column for the widget
+        n = len(self.stats) 
+        column = n // self.stats_per_column
+        row = n % self.stats_per_column
+
+        # Create a frame & stat label
+        frame = tk.Frame(self)
+        nameLabel = tk.Label(frame, text=name + ': ') # Stat name (e.g mean/median)
+        nameLabel.grid(row=0,column=0, sticky='w')
+        # Create stat for all labels (cats, foxes, etc)
+        for i, label in enumerate(self.labels):
+            labelLabel = tk.Label(frame, text=' ' * 5 + label + ':') # Label name (e.g cat/fox)
+            stat = tk.Label(frame) # Actual number
+            labelLabel.grid(row=i + 1, column=0, sticky='w')
+            stat.grid(row=i + 1, column=1, sticky='w')
+            self.stats.append((stat, label, func))
+
+        frame.grid(row=row, column=column, padx=self.padx, pady=self.pady, sticky='w')
+
+    # Update values for all stats
+    def update_stats(self, y_axs):
+        for stat, label, func in self.stats:
+            number = round(func(y_axs[label]), 2)
+            stat.config(text=str(number))
 
 # Toolbar and video itself
 class VideoPlayer(tk.Frame):
