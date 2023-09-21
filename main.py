@@ -23,11 +23,9 @@ class MainApp(tk.Tk):
 
         self.settings = settings.Settings()
 
-        rtsp_url = self.settings.get('Camera url')
         self.cam_end = threading.Event()
         self.db = dbutils.Database()
-        self.cam = camutils.Camera(rtsp_url, self.db, log=True)
-        self.cam_thread = threading.Thread(target=self.cam.start, args=(self.cam_end,))
+        self.cam_thread = None
         if self.settings.get('Autostart camera'):
             self.start_camera()
 
@@ -49,8 +47,13 @@ class MainApp(tk.Tk):
         self.currentTab.grid(row=0, column=1)
 
     # Starts the camera if it's not working
-    def start_camera(self, restart=False):
-        if not self.cam_thread.is_alive():
+    def start_camera(self):
+        if self.cam_thread == None or not self.cam_thread.is_alive():
+            rtsp_url = self.settings.get("Camera url")
+            start_time = datetime.datetime.strptime(self.settings.get("Camera start time"), "%H:%M")
+            end_time = datetime.datetime.strptime(self.settings.get("Camera end time"), "%H:%M")
+            self.cam = camutils.Camera(rtsp_url, self.db, start_time, end_time, log=True)
+
             self.cam_thread = threading.Thread(target=self.cam.start, args=(self.cam_end,))
             self.cam_end.clear()
             self.cam_thread.start()
@@ -58,7 +61,7 @@ class MainApp(tk.Tk):
     # Stops the camera if it's working
     def stop_camera(self):
         self.cam_end.set()
-        if self.cam_thread.is_alive():
+        if self.cam_thread != None and self.cam_thread.is_alive():
             self.cam_thread.join()
 
     # Restarts the camera
@@ -83,8 +86,13 @@ class MainApp(tk.Tk):
 
     # Called when top right corner close button is pressed
     def close(self):
+        # Close plot and tkinter window
         plt.close('all')
         self.destroy()
+        # End camera thread
+        if self.cam_thread:
+            self.cam_end.set()
+            self.cam_thread.join()
 
 
 # Main menu in top left corner
@@ -306,6 +314,8 @@ class SettingsMenu(tk.Frame):
                                                                                       "1600x900",  
                                                                                       "1920x1080"])
         settingsFrame.add_setting(tk.Checkbutton, 'Autostart camera')
+        settingsFrame.add_setting(tk.Entry, 'Camera start time', 'Camera start time (hh:mm)', width=5)
+        settingsFrame.add_setting(tk.Entry, 'Camera end time', 'Camera end time (hh:mm)', width=5)
 
 
 # Frame with settings and convenient functions for creating them

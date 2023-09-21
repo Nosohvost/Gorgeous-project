@@ -8,6 +8,7 @@ import cv2 as cv
 import threading
 import numpy as np
 from src import dbutils
+import datetime
 import time
 
 LEARNER_PATH = './NN.pkl'
@@ -61,11 +62,13 @@ class Classifier():
 
 
 class Camera():
-    def __init__(self, rtsp_url, database, log=False):
+    def __init__(self, rtsp_url, database, start_time: datetime.datetime, end_time: datetime.datetime, log=False):
         self.rtsp_url = rtsp_url
         self.classifier = Classifier()
         self.db = database
         self.log = log
+        self.start_time = start_time
+        self.end_time = end_time
 
         # Fps in saved videos
         self.fps = 14
@@ -116,6 +119,15 @@ class Camera():
 
         # Keep reading new frames until either stopped by main program or error occurs
         while self.cam.isOpened() and not end.is_set() and success:
+            # If current time is not during working hours, skip the whole loop
+            current_time = datetime.datetime.now()
+            start_today = current_time.replace(hour=self.start_time.hour, minute=self.start_time.minute)
+            end_today = current_time.replace(hour=self.end_time.hour, minute=self.end_time.minute)
+            if (start_today < end_today and (current_time < start_today or end_today < current_time)) or (
+                start_today > end_today and (current_time < start_today and end_today < current_time)):
+                #self.print_log(f"Outside working hours, sleeping at {current_time}")
+                time.sleep(1) # Sleep to not load the CPU
+
             # Update the number of consequent frames which exceeded MSE threshold (or reset to 0)
             if self.mse(frames_queue[-1], frames_queue[-2]) > mse_threshold:
                 consequent_frames += 1
