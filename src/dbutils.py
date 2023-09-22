@@ -49,11 +49,13 @@ class Database():
 
 
         # Create the video
-        video = cv.VideoWriter(VIDEOS_PATH + name + '.mp4', fourcc, float(fps), (width, height))
-        for frame in frames:
-            video.write(frame)
-        
-        self.print_log("Finished saving")
+        try:
+            video = cv.VideoWriter(VIDEOS_PATH + name + '.mp4', fourcc, float(fps), (width, height))
+            for frame in frames:
+                video.write(frame)
+            self.print_log("Finished saving")
+        except:
+            self.print_log(f"Error occurred during saving, skipping")
 
     # Delete the database
     def delete_database(self):

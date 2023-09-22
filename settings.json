@@ -1,6 +1,6 @@
 {
     "Camera url": "rtsp://username:spying_on_foxes@192.168.0.211:554/stream1",
-    "Autostart camera": 1,
+    "Autostart camera": 0,
     "Window width": "800",
     "Window height": "600",
     "Window resolution": "1600x900",
@@ -12,5 +12,5 @@
     "Plot start": "",
     "Plot end": "",
     "Camera start time": "23:00",
-    "Camera end time": "0:30"
+    "Camera end time": "6:00"
 }

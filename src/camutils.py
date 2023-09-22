@@ -169,7 +169,7 @@ class Camera():
         if pred not in ('Cat', 'Fox'):
             return
         
-        unix_time = time.time()
+        unix_time = int(time.time())
         formatted_time = time.strftime("%d/%m/%y %H:%M:%S") # Date in more human-readable format
         file_name_time = time.strftime("%d-%m-%y %Hh %Mm %Ss") # Time for file name
         video_name = pred + " " + file_name_time

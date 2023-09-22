@@ -185,7 +185,10 @@ class StatisticsMenu(tk.Frame):
             average_divisor = 1
 
         for label in self.labels:
-            data[label] = {}
+            # Add 1 dummy value so no dictionaries are empty
+            dummy_time = round(time_lib.time() / round_sec) * round_sec # Round the time
+            dummy_time %= average_period
+            data[label] = {dummy_time: 0}
         for row in records:
             unix_time = int(row['Unix time'])
             # Skip if out of needed time period
@@ -432,9 +435,9 @@ class VideoPlayer(tk.Frame):
         self.video_index = 0
         self.videos_list = ["videos/" + file for file in os.listdir('./videos')]
 
-        self.video = TkinterVideo(self, height=1, width=1, scaled=True)
+        self.video = TkinterVideo(self, height=400, width=400, scaled=True)
         # Fix for a bug in the tkVideoPlayer library
-        self.video.bind("<<Loaded>>", lambda e: e.widget.config(width=self.VIDEO_WIDTH, height=self.VIDEO_HEIGHT))
+        #self.video.bind("<<Loaded>>", lambda e: e.widget.config(width=self.VIDEO_WIDTH, height=self.VIDEO_HEIGHT))
         
         # Toolbar and progress bar
         self.progressBar = ProgressBar(self, height=20, width=self.VIDEO_WIDTH, video=self.video, bg='black')
