@@ -435,9 +435,9 @@ class VideoPlayer(tk.Frame):
         self.video_index = 0
         self.videos_list = ["videos/" + file for file in os.listdir('./videos')]
 
-        self.video = TkinterVideo(self, height=400, width=400, scaled=True)
+        self.video = TkinterVideo(self, height=1, width=1, scaled=True)
         # Fix for a bug in the tkVideoPlayer library
-        #self.video.bind("<<Loaded>>", lambda e: e.widget.config(width=self.VIDEO_WIDTH, height=self.VIDEO_HEIGHT))
+        self.video.bind("<<Loaded>>", lambda e: e.widget.config(width=self.VIDEO_WIDTH, height=self.VIDEO_HEIGHT))
         
         # Toolbar and progress bar
         self.progressBar = ProgressBar(self, height=20, width=self.VIDEO_WIDTH, video=self.video, bg='black')
@@ -520,6 +520,7 @@ class VideoPlayer(tk.Frame):
         self.video_index = max(self.video_index - 1, 0)
         self.load_video()
     
+# Progress bar below the video to navigate it using mouse
 class ProgressBar(tk.Frame):
     def __init__(self, master, height, width, video: TkinterVideo, *args, **kwargs):
         super().__init__(master, height=height, width=width, *args, **kwargs)

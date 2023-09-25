@@ -116,6 +116,7 @@ class Camera():
         consequent_frames = 0
         to_be_saved = 0
         frames_queue = [new_frame] * 30 # Fill the queue with the first frame
+        consequent_failed = 0 # Number of consequent frames that failed to load
 
         # Keep reading new frames until either stopped by main program or error occurs
         while self.cam.isOpened() and not end.is_set() and success:
@@ -127,6 +128,7 @@ class Camera():
                 start_today > end_today and (current_time < start_today and end_today < current_time)):
                 #self.print_log(f"Outside working hours, sleeping at {current_time}")
                 time.sleep(1) # Sleep to not load the CPU
+                continue
 
             # Update the number of consequent frames which exceeded MSE threshold (or reset to 0)
             if self.mse(frames_queue[-1], frames_queue[-2]) > mse_threshold:
@@ -152,8 +154,20 @@ class Camera():
 
             # Read a new frame and update the queue
             success, new_frame = self.read_frame()
-            frames_queue.append(new_frame)
-            frames_queue.pop(0)
+            if success:
+                consequent_failed = 0
+                frames_queue.append(new_frame)
+                frames_queue.pop(0)
+            else:
+                consequent_failed += 1
+                self.print_log("Failed to read new frame")
+                # Restart the camera if many frames couldn't be loaded
+                if consequent_failed > 3:
+                    self.cam.release()
+                    self.print_log("Reconnecting to camera")
+                    self.cam = cv.VideoCapture(self.rtsp_url)
+                    self.print_log("Reconnected successfully")
+                    consequent_failed = 0
                 
         self.print_log('Exiting camera')
         self.cam.release()
