@@ -119,7 +119,7 @@ class Camera():
         consequent_failed = 0 # Number of consequent frames that failed to load
 
         # Keep reading new frames until either stopped by main program or error occurs
-        while self.cam.isOpened() and not end.is_set() and success:
+        while self.cam.isOpened() and not end.is_set():
             # If current time is not during working hours, skip the whole loop
             current_time = datetime.datetime.now()
             start_today = current_time.replace(hour=self.start_time.hour, minute=self.start_time.minute)

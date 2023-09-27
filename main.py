@@ -434,7 +434,9 @@ class VideoPlayer(tk.Frame):
 
         self.video_index = 0
         self.videos_list = ["videos/" + file for file in os.listdir('./videos')]
+        self.videos_list.sort()
 
+        self.videoLabel = tk.Label(self)
         self.video = TkinterVideo(self, height=1, width=1, scaled=True)
         # Fix for a bug in the tkVideoPlayer library
         self.video.bind("<<Loaded>>", lambda e: e.widget.config(width=self.VIDEO_WIDTH, height=self.VIDEO_HEIGHT))
@@ -452,19 +454,19 @@ class VideoPlayer(tk.Frame):
                                     command=self.choose_video)
 
         # Progress bar & buttons' frame
-        self.progressBar.grid(row=1, column=0)
-        self.toolBar.grid(row=2, column=0)
+        self.progressBar.grid(row=2, column=0)
+        self.toolBar.grid(row=3, column=0)
 
         # Buttons
         padx = 5
-        self.loadButton.grid(row=2, column=0, padx=padx, sticky='W')
+        self.loadButton.grid(row=3, column=0, padx=padx, sticky='W')
         self.previousVideoButton.grid(row=0, column=1, padx=padx)
         self.pauseButton.grid(row=0, column=2, padx=padx)
         self.nextVideoButton.grid(row=0, column=3, padx=padx)
 
-        self.video.grid(row=0, column=0)
-        self.video.load(self.videos_list[0])
-        self.video.play()
+        self.videoLabel.grid(row=0, column=0)
+        self.video.grid(row=1, column=0)
+        self.load_video()
 
     # Pause the video
     def pause(self):
@@ -509,6 +511,8 @@ class VideoPlayer(tk.Frame):
         timer = threading.Timer(0.1, lambda: self.video.play()) # Waits a bit to ensure previous video was closed
         timer.start()
         self.pauseButton.config(text='Pause')
+        video_title = self.videos_list[self.video_index].split('/')[1] # Get rid of folder name
+        self.videoLabel.config(text=video_title) # Change video title
 
     # Load next video
     def next_video(self):
