@@ -76,7 +76,7 @@ class MainApp(tk.Tk):
 
     def open_video_player(self):
         self.currentTab.destroy()
-        self.currentTab = VideoPlayer(self, self.settings)
+        self.currentTab = VideoPlayer(self, self.settings, self.db)
         self.currentTab.grid(row=0, column=1)
 
     def open_settings(self):
@@ -425,9 +425,10 @@ class Statistics(tk.Frame):
 
 # Toolbar and video itself
 class VideoPlayer(tk.Frame):
-    def __init__(self, master, settings: settings.Settings, *args, **kwargs):
+    def __init__(self, master, settings: settings.Settings, db: dbutils.Database, *args, **kwargs):
         super().__init__(master, *args, **kwargs)
         self.settings = settings
+        self.db = db
 
         self.VIDEO_HEIGHT = 432
         self.VIDEO_WIDTH = 768
@@ -444,6 +445,7 @@ class VideoPlayer(tk.Frame):
         # Toolbar and progress bar
         self.progressBar = ProgressBar(self, height=20, width=self.VIDEO_WIDTH, video=self.video, bg='black')
         self.toolBar = tk.Frame(self)
+        self.setLabelFrame = tk.Frame(self)
         self.pauseButton = tk.Button(self.toolBar, text='Pause', 
                                      command=self.pause_button_click, width=8)
         self.nextVideoButton = tk.Button(self.toolBar, text='Next video', 
@@ -452,10 +454,18 @@ class VideoPlayer(tk.Frame):
                                              command=self.previous_video)
         self.loadButton = tk.Button(self, text='Load video',
                                     command=self.choose_video)
+        self.setLabelButton = tk.Button(self.setLabelFrame, text='Change label',
+                                        command=self.set_video_label)
+        self.setLabelCombobox = ttk.Combobox(self.setLabelFrame, 
+                                             values=['Fox', 'Cat', 'Remove'], 
+                                             state="readonly",
+                                             width=10)
+        self.setLabelCombobox.current(0) # Choose the first label as default
 
         # Progress bar & buttons' frame
         self.progressBar.grid(row=2, column=0)
         self.toolBar.grid(row=3, column=0)
+        self.setLabelFrame.grid(row=4, column=0, sticky='w')
 
         # Buttons
         padx = 5
@@ -463,6 +473,8 @@ class VideoPlayer(tk.Frame):
         self.previousVideoButton.grid(row=0, column=1, padx=padx)
         self.pauseButton.grid(row=0, column=2, padx=padx)
         self.nextVideoButton.grid(row=0, column=3, padx=padx)
+        self.setLabelButton.grid(row=0, column=0, padx=padx)
+        self.setLabelCombobox.grid(row=0, column=1)
 
         self.videoLabel.grid(row=0, column=0)
         self.video.grid(row=1, column=0)
@@ -523,6 +535,36 @@ class VideoPlayer(tk.Frame):
     def previous_video(self):
         self.video_index = max(self.video_index - 1, 0)
         self.load_video()
+
+    def set_video_label(self):
+        new_label = self.setLabelCombobox.get()
+        prev_path = self.videos_list[self.video_index]
+
+        # Separate full path into folder path and video name
+        video_name_index = prev_path.rfind('/') + 1 
+        folder_path = prev_path[:video_name_index]
+        video_name = prev_path[video_name_index:]
+
+        # Replace the label and get unix time
+        name_without_label = video_name[video_name.find(' '):]
+        new_video_name = new_label + name_without_label
+        date = datetime.datetime.strptime(name_without_label[1:-4], "%d-%m-%y %Hh %Mm %Ss") # datetime object
+        unix_time = int(time_lib.mktime(date.timetuple()))
+
+        # Change the video path and database records
+        new_path = folder_path + new_video_name
+        delete = new_label == 'Remove'
+        if delete:
+            self.videos_list.pop(self.video_index)
+            os.remove(prev_path)
+            self.next_video()
+        else:
+            self.videos_list[self.video_index] = new_path
+            os.rename(prev_path, new_path)
+            self.load_video()
+            
+        self.db.change_label(unix_time, new_label, delete=delete)
+        
     
 # Progress bar below the video to navigate it using mouse
 class ProgressBar(tk.Frame):

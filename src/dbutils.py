@@ -63,7 +63,18 @@ class Database():
             writer = csv.DictWriter(file, delimiter=',', 
                                     quoting=csv.QUOTE_MINIMAL, fieldnames=self.header)
             writer.writeheader()
-            print('Database deleted')
+            self.print_log('Database deleted')
+
+    # Change label with corresponding unix_time to another label
+    def change_label(self, unix_time, new_label, delete=False):
+        rows = self.read_records()
+        self.delete_database() # Delete and rewrite the whole database
+        for row in rows:
+            if int(row['Unix time']) == unix_time:
+                if delete: # Don't add the row if it should be deleted
+                    continue
+                row['Label'] = new_label
+            self.write_record(row)
 
     # Put random entries in database
     def random_database(self, n):
