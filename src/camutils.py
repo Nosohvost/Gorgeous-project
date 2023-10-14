@@ -19,6 +19,7 @@ class Classifier():
     def __init__(self):
         self.LEARNER_PATH = LEARNER_PATH
         self.learner = load_learner(self.LEARNER_PATH)
+        self.MSE_THRESHOLD = 20
 
         # Number of pixels to crop each side
         self.top_crop = 100
@@ -31,6 +32,18 @@ class Classifier():
         return frame[top_crop : frame.shape[0] - bottom_crop, 
                      left_crop : frame.shape[1] - right_crop]
     
+    # Calculates MSE between two frames
+    def mse(self, frame1, frame2):
+        # Cast uint8 to int32 to avoid overflow
+        frame1 = frame1.astype(np.int32)
+        frame2 = frame2.astype(np.int32)
+    
+        assert frame1.shape == frame2.shape, "Shapes do not match"
+
+        # Calculate MSE
+        mse = np.mean((frame1 - frame2) ** 2)
+        return mse
+    
     # Classifies a video. Video must be a list of frames
     def classify_video(self, video):
         predictions = {'Empty': 0,
@@ -40,10 +53,11 @@ class Classifier():
                        'Fox'  : 0}
 
         # Get predictions for each frame
-        for frame in video:
-            transformed_frame = cv.cvtColor(frame, cv.COLOR_BGR2RGB) # Convert from BGR to RGB
-            transformed_frame = self.crop_frame(transformed_frame, self.top_crop, self.bottom_crop, self.left_crop, self.right_crop) # Crop the frame
-            predictions[self.classify_img(transformed_frame)] += 1
+        for i, frame in enumerate(video):
+            if self.mse(video[i - 1], frame) > self.MSE_THRESHOLD:
+                transformed_frame = cv.cvtColor(frame, cv.COLOR_BGR2RGB) # Convert from BGR to RGB
+                transformed_frame = self.crop_frame(transformed_frame, self.top_crop, self.bottom_crop, self.left_crop, self.right_crop) # Crop the frame
+                predictions[self.classify_img(transformed_frame)] += 1
 
         # Return 'Empty' if >90% of frames are classified as empty
         empty_count = predictions['Empty']
@@ -99,7 +113,7 @@ class Camera():
             return False, None
     
     # Start looking for movement on the camera
-    def start(self, end: threading.Event, mse_threshold=30, consequent_frames_threshold=4):
+    def start(self, end: threading.Event, mse_threshold=20, consequent_frames_threshold=4):
         ''' Starts looking for movement on a camera until stopped by main program
             or an error occurs. When MSE between <n> consequent frames exceeds threshold,
             the next 70 frames (~5 seconds) and 30 previous are recorded. When frames are finished recording,

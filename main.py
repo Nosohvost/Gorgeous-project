@@ -557,12 +557,11 @@ class VideoPlayer(tk.Frame):
         if delete:
             self.videos_list.pop(self.video_index)
             os.remove(prev_path)
-            self.next_video()
         else:
             self.videos_list[self.video_index] = new_path
             os.rename(prev_path, new_path)
-            self.load_video()
-            
+        
+        self.load_video()
         self.db.change_label(unix_time, new_label, delete=delete)
         
     
