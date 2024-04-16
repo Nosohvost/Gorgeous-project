@@ -14,6 +14,7 @@ import datetime
 import time as time_lib
 import matplotlib.dates as plt_dates
 import numpy as np
+import re
 
 INF = int(1e20)
 
@@ -145,8 +146,8 @@ class StatisticsMenu(tk.Frame):
                                                                                "Days",
                                                                                "Weeks",
                                                                                "Months"], state="readonly")
-        self.settingsWidgets.add_setting(tk.Entry, "Plot start", "Start date (dd/mm/yy)", width=8)
-        self.settingsWidgets.add_setting(tk.Entry, "Plot end", "End date (dd/mm/yy)", width=8)
+        self.settingsWidgets.add_setting(tk.Entry, "Plot start", "Start date (dd/mm/yy)", width=8, validation_regex=r'\d{2}/\d{2}/\d{2}')
+        self.settingsWidgets.add_setting(tk.Entry, "Plot end", "End date (dd/mm/yy)", width=8, validation_regex=r'\d{2}/\d{2}/\d{2}')
         self.settingsWidgets.add_setting(tk.Label, None, text="Leave start/end dates empty\nto include everything", fg='red')
 
         # Add stats
@@ -315,10 +316,13 @@ class SettingsMenu(tk.Frame):
         settingsFrame.add_setting(ttk.Combobox, 'Window resolution', width=9, values=["640x480", 
                                                                                       "800x600", 
                                                                                       "1600x900",  
-                                                                                      "1920x1080"])
+                                                                                      "1920x1080"],
+                                validation_regex=r'\d+x\d+')
         settingsFrame.add_setting(tk.Checkbutton, 'Autostart camera')
-        settingsFrame.add_setting(tk.Entry, 'Camera start time', 'Camera start time (hh:mm)', width=5)
-        settingsFrame.add_setting(tk.Entry, 'Camera end time', 'Camera end time (hh:mm)', width=5)
+        settingsFrame.add_setting(tk.Entry, 'Camera start time', 'Camera start time (hh:mm)', width=5,
+                                  validation_regex=r'\d{2}:\d{2}')
+        settingsFrame.add_setting(tk.Entry, 'Camera end time', 'Camera end time (hh:mm)', width=5,
+                                  validation_regex=r'\d{2}:\d{2}')
 
 
 # Frame with settings and convenient functions for creating them
@@ -335,7 +339,8 @@ class SettingsWidgets(tk.Frame):
         self.settings_padx = padx
 
     # Adds a setting to settingsFrame
-    def add_setting(self, setting_class: tk.Widget, setting_name, text=None, *args, **kwargs):
+    def add_setting(self, setting_class: tk.Widget, setting_name, text=None, 
+                    validation_regex = r'.*', *args, **kwargs):
         if text == None:
             text = setting_name
 
@@ -377,12 +382,27 @@ class SettingsWidgets(tk.Frame):
 
         frame.grid(row=row, column=column, padx=self.settings_padx, pady=self.settings_pady, sticky='w')
 
-        self.settingsWidgets.append((setting_instance, setting_name))
+        # Create a list of all needed widget parameters
+        result = [setting_instance, setting_name, validation_regex]
+
+        # Save the list of parameters
+        self.settingsWidgets.append(result)
+            
 
     # Collect values in entries and save them
     def apply_settings(self):
-        for widget, setting_name in self.settingsWidgets:
-            self.settings.set(setting_name, widget.get())
+        for widget, setting_name, regex in self.settingsWidgets:
+            # Validate user's input
+            if re.fullmatch(regex, str(widget.get())) == None:
+                # Return to previous state if input is invalid
+                if type(widget) == ttk.Combobox:
+                    widget.set(self.settings.get(setting_name))
+                else:
+                    widget.delete(0, tk.END)
+                    widget.insert(0, self.settings.get(setting_name))
+            else:
+                # Otherwise save the setting
+                self.settings.set(setting_name, widget.get())
         self.settings.apply()
 
 class Statistics(tk.Frame):
