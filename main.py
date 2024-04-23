@@ -186,10 +186,8 @@ class StatisticsMenu(tk.Frame):
             average_divisor = 1
 
         for label in self.labels:
-            # Add 1 dummy value so no dictionaries are empty
-            dummy_time = round(time_lib.time() / round_sec) * round_sec # Round the time
-            dummy_time %= average_period
-            data[label] = {dummy_time: 0}
+            data[label] = {}
+
         for row in records:
             unix_time = int(row['Unix time'])
             # Skip if out of needed time period
@@ -253,6 +251,10 @@ class StatisticsMenu(tk.Frame):
         min_time = INF
         max_time = -1
         for label_dict in records_dict.values():
+            if len(label_dict) == 0:
+                dummy_time = round(time_lib.time() / round_sec) * round_sec # Round the time
+                dummy_time %= average_period
+                label_dict[dummy_time] = 0
             min_time = min(min_time, min(label_dict))
             max_time = max(max_time, max(label_dict))
 
