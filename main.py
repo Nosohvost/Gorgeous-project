@@ -289,6 +289,7 @@ class StatisticsMenu(tk.Frame):
         plt.legend()
         self.fig_canvas.draw()
         self.toolbar.update()
+        print(records_dict)
 
 
 class SettingsMenu(tk.Frame):
@@ -477,7 +478,7 @@ class VideoPlayer(tk.Frame):
         self.loadButton = tk.Button(self, text='Load video',
                                     command=self.choose_video)
         self.setLabelButton = tk.Button(self.setLabelFrame, text='Change label',
-                                        command=self.set_video_label)
+                                        command=self.click_change_label)
         self.setLabelCombobox = ttk.Combobox(self.setLabelFrame, 
                                              values=['Fox', 'Cat', 'Remove'], 
                                              state="readonly",
@@ -557,6 +558,11 @@ class VideoPlayer(tk.Frame):
     def previous_video(self):
         self.video_index = max(self.video_index - 1, 0)
         self.load_video()
+
+    def click_change_label(self):
+        self.video.stop()
+        timer = threading.Timer(0.1, lambda: self.set_video_label()) # Waits a bit to ensure the video was closed
+        timer.start()
 
     def set_video_label(self):
         new_label = self.setLabelCombobox.get()
